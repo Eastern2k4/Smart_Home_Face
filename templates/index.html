@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Face Recognition</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🏠 Smart Home Face Recognition</h1>
+            <p>Intelligent facial recognition system for your smart home</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Left Section: Verification -->
+            <div class="section">
+                <h2>Face Verification</h2>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="upload-tab">Upload</button>
+                    <button class="tab-btn" data-tab="camera-tab">Camera</button>
+                    <button class="tab-btn" data-tab="esp32-tab">ESP32</button>
+                </div>
+
+                <!-- Upload Tab -->
+                <div id="upload-tab" class="tab-content active">
+                    <div class="upload-box" id="uploadBox">
+                        <div class="upload-icon">📤</div>
+                        <p><strong>Click to upload</strong> or drag and drop</p>
+                        <p style="font-size: 0.9em; color: #999;">PNG, JPG, GIF up to 10MB</p>
+                        <input type="file" id="imageInput" accept="image/*">
+                    </div>
+                </div>
+
+                <!-- Camera Tab -->
+                <div id="camera-tab" class="tab-content">
+                    <div class="camera-container">
+                        <video id="cameraVideo" autoplay playsinline></video>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn-primary" id="startCameraBtn">🎥 Start Camera</button>
+                        <button class="btn-secondary" id="stopCameraBtn" style="display: none;">Stop Camera</button>
+                    </div>
+                    <button class="btn-success" id="captureBtn" style="display: none; width: 100%;">📸 Capture & Verify</button>
+                </div>
+
+                <!-- ESP32 Tab -->
+                <div id="esp32-tab" class="tab-content">
+                    <div class="esp32-config">
+                        <input type="text" id="esp32UrlInput" placeholder="http://192.168.1.100/capture">
+                        <button class="btn-primary" id="fetchEsp32Btn" style="width: 100%; margin-top: 10px;">📡 Fetch ESP32 Snapshot</button>
+                    </div>
+                    <div class="esp32-preview">
+                        <img id="esp32PreviewImg" class="preview-img" style="display: none; margin-top: 20px;" alt="ESP32 snapshot">
+                    </div>
+                </div>
+
+                <!-- Preview Image -->
+                <img id="previewImg" class="preview-img" style="display: none;">
+
+                <!-- Loading -->
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Processing face recognition...</p>
+                </div>
+
+                <!-- Result -->
+                <div class="result" id="result"></div>
+            </div>
+
+            <!-- Right Section: Database Management -->
+            <div class="section">
+                <h2>Face Database</h2>
+
+                <button class="btn-primary" id="addFaceBtn" style="width: 100%;">➕ Add New Face</button>
+
+                <div class="face-list" id="faceList">
+                    <div class="empty-message">Loading...</div>
+                </div>
+
+                <!-- Stats -->
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center;">
+                    <p style="color: #666; margin-bottom: 5px;">Database Status</p>
+                    <p style="font-size: 1.5em; font-weight: 700; color: #667eea;" id="faceCount">0 faces</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Face Modal -->
+    <div class="modal" id="addFaceModal">
+        <div class="modal-content">
+            <div class="modal-header">Add New Face</div>
+            <div class="modal-body">
+                <input type="text" id="faceNameInput" placeholder="Enter person's name" required>
+                <input type="file" id="faceImageInput" accept="image/*" style="display: none;">
+                <button class="btn-secondary" onclick="document.getElementById('faceImageInput').click()" style="width: 100%; margin-top: 10px;">Select Image</button>
+                <p id="selectedFileInfo" style="margin-top: 10px; color: #666;"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelAddBtn">Cancel</button>
+                <button class="btn-primary" id="confirmAddBtn">Add Face</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Handle file input change for display -->
+    <script>
+        document.getElementById('faceImageInput').addEventListener('change', function() {
+            if (this.files[0]) {
+                document.getElementById('selectedFileInfo').textContent = '✅ ' + this.files[0].name;
+            }
+        });
+
+        // Update face count
+        setInterval(() => {
+            const faces = document.getElementById('faceList').querySelectorAll('.face-item').length;
+            if (faces > 0) {
+                document.getElementById('faceCount').textContent = faces + ' face' + (faces !== 1 ? 's' : '');
+            }
+        }, 500);
+    </script>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
