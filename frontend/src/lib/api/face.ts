@@ -72,6 +72,22 @@ export const faceApi = {
     return res.json();
   },
 
+  async fetchESP32Snapshot(cameraUrl: string): Promise<File> {
+    const res = await fetch(`${API_BASE}/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`);
+    if (!res.ok) {
+      let errorText = res.statusText;
+      try {
+        const data = await res.json();
+        errorText = data.error || data.message || errorText;
+      } catch {
+        errorText = await res.text();
+      }
+      throw new Error(`Failed to fetch ESP32 snapshot: ${errorText}`);
+    }
+    const blob = await res.blob();
+    return new File([blob], "esp32-capture.jpg", { type: "image/jpeg" });
+  },
+
   async deleteFace(name: string): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE}/delete-face`, {
       method: "POST",

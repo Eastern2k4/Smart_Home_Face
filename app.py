@@ -5,26 +5,104 @@ import shutil
 from urllib.parse import urlparse, urljoin
 import urllib.request
 from werkzeug.utils import secure_filename
-
+import requests
+import http.client
 
 import pandas as pd  # add this at the top of app.py if not already
-import subprocess  # <-- add this
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 
-def curl_get(url, timeout=5):
-    """Fetch data using curl (bypasses Python socket issues)"""
-    cmd = ["curl", "-s", "-m", str(timeout), url]
+def build_esp32_url_candidates(camera_url: str):
+    parsed = urlparse(camera_url)
+    base_url = camera_url.rstrip('/')
+    candidates = [base_url]
+
+    if not parsed.path or parsed.path == '/':
+        candidates.extend([
+            urljoin(base_url, '/capture'),
+            urljoin(base_url, '/jpg'),
+            urljoin(base_url, '/jpeg'),
+            urljoin(base_url, '/stream'),
+            urljoin(base_url, '/video'),
+        ])
+    elif parsed.path.endswith('/capture'):
+        root = base_url[: base_url.rfind('/capture')]
+        candidates.extend([
+            urljoin(root, '/jpg'),
+            urljoin(root, '/jpeg'),
+            urljoin(root, '/stream'),
+            urljoin(root, '/video'),
+        ])
+    elif parsed.path.endswith('/jpg') or parsed.path.endswith('/jpeg'):
+        root = base_url[: base_url.rfind('/')]
+        candidates.extend([
+            urljoin(root, '/capture'),
+            urljoin(root, '/stream'),
+            urljoin(root, '/video'),
+        ])
+    return list(dict.fromkeys(candidates))
+
+
+def fetch_esp32_image(url, timeout=30):
+    """Fetch image data from ESP32 camera"""
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, timeout=timeout + 1, check=True
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"curl failed (exit {e.returncode}): {e.stderr.decode()}")
-    except subprocess.TimeoutExpired:
-        raise Exception(f"curl timeout after {timeout}s")
+        print(f"[ESP32] Connecting to: {url} (timeout: {timeout}s)")
+        response = requests.get(url, timeout=timeout, stream=True)
+        print(f"[ESP32] Response status: {response.status_code}")
+        response.raise_for_status()
+        content_type = response.headers.get('content-type', '').lower()
+        print(f"[ESP32] Content-Type: {content_type}")
+
+        if 'multipart' in content_type and 'boundary=' in content_type:
+            boundary = content_type.split('boundary=')[-1].strip()
+            if boundary.startswith('"') and boundary.endswith('"'):
+                boundary = boundary[1:-1]
+            boundary_bytes = boundary.encode('utf-8')
+        else:
+            boundary_bytes = None
+
+        image_data = bytearray()
+        try:
+            for chunk in response.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                image_data.extend(chunk)
+
+                if boundary_bytes:
+                    start = image_data.find(b'\xff\xd8')
+                    end = image_data.find(b'\xff\xd9', start + 2) if start != -1 else -1
+                    if start != -1 and end != -1:
+                        jpeg = image_data[start:end + 2]
+                        print(f"[ESP32] MJPEG frame captured: {len(jpeg)} bytes")
+                        return bytes(jpeg)
+                else:
+                    if image_data.endswith(b"\xff\xd9"):
+                        print(f"[ESP32] JPEG end found after {len(image_data)} bytes")
+                        return bytes(image_data)
+
+                if len(image_data) > 5 * 1024 * 1024:
+                    raise Exception("ESP32 image exceeded 5MB limit")
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError, http.client.IncompleteRead) as e:
+            if image_data:
+                print(f"[ESP32] Warning: incomplete stream, using {len(image_data)} bytes")
+                return bytes(image_data)
+            raise
+
+        if not image_data:
+            raise Exception("Empty image response from ESP32 camera")
+
+        if image_data.endswith(b"\xff\xd9"):
+            return bytes(image_data)
+
+        print(f"[ESP32] Warning: collected {len(image_data)} bytes without JPEG end marker")
+        return bytes(image_data)
+    except requests.exceptions.Timeout:
+        raise Exception(f"Request timeout after {timeout}s - ESP32 camera not responding. Check if ESP32 is powered on and reachable.")
+    except requests.exceptions.ConnectionError as e:
+        raise Exception(f"Cannot connect to ESP32 at this address. Error: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Request failed: {str(e)}")
 
 
 # CORS headers
@@ -253,19 +331,76 @@ def esp32_snapshot():
     if not camera_url:
         return jsonify({"error": "camera_url query parameter is required"}), 400
 
-    # Optional: ensure the URL ends with /capture
-    from urllib.parse import urlparse, urljoin
+    candidates = build_esp32_url_candidates(camera_url)
+    last_error = None
 
-    parsed_url = urlparse(camera_url)
-    if not parsed_url.path or parsed_url.path == "/":
-        camera_url = urljoin(camera_url, "/capture")
+    for candidate in candidates:
+        try:
+            print(f"[ESP32] Trying snapshot URL: {candidate}")
+            image_data = fetch_esp32_image(candidate, timeout=30)
+            print(f"[ESP32] Successfully fetched {len(image_data)} bytes from {candidate}")
+            return Response(image_data, content_type="image/jpeg")
+        except Exception as e:
+            print(f"[ESP32] Candidate failed: {candidate} -> {e}")
+            last_error = e
 
-    try:
-        # Use curl instead of urllib
-        image_data = curl_get(camera_url, timeout=10)
-        return Response(image_data, content_type="image/jpeg")
-    except Exception as e:
-        return jsonify({"error": f"Failed to fetch ESP32 snapshot: {str(e)}"}), 500
+    error_message = str(last_error) if last_error else "Unknown ESP32 snapshot error"
+    return jsonify({"error": f"Failed to fetch ESP32 snapshot: {error_message}"}), 500
+
+
+@app.route("/esp32/test", methods=["GET"])
+def esp32_test():
+    """Test ESP32 connectivity"""
+    camera_url = request.args.get("camera_url", "").strip()
+    if not camera_url:
+        return jsonify({"error": "camera_url query parameter is required"}), 400
+
+    candidates = build_esp32_url_candidates(camera_url)
+    results = []
+
+    print(f"\n[ESP32 TEST] Testing connection to candidates: {candidates}")
+
+    for candidate in candidates:
+        try:
+            response = requests.get(candidate, timeout=5, stream=True)
+            status_code = response.status_code
+            content_type = response.headers.get('content-type', 'unknown')
+            msg = f"Status: {status_code}. Content-Type: {content_type}"
+            if status_code == 405:
+                msg += " (GET not allowed)"
+            results.append({
+                "url": candidate,
+                "status_code": status_code,
+                "content_type": content_type,
+                "message": msg,
+            })
+        except requests.exceptions.Timeout:
+            results.append({
+                "url": candidate,
+                "status_code": None,
+                "content_type": None,
+                "message": "Timeout",
+            })
+        except requests.exceptions.ConnectionError as e:
+            results.append({
+                "url": candidate,
+                "status_code": None,
+                "content_type": None,
+                "message": f"Connection error: {str(e)}",
+            })
+        except Exception as e:
+            results.append({
+                "url": candidate,
+                "status_code": None,
+                "content_type": None,
+                "message": f"Error: {str(e)}",
+            })
+
+    return jsonify({
+        "success": any(r["status_code"] == 200 for r in results if r["status_code"] is not None),
+        "camera_url": camera_url,
+        "results": results,
+    })
 
 
 @app.route("/upload", methods=["POST"])

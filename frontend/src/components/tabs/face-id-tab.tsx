@@ -53,6 +53,9 @@ export function FaceIdTab() {
   const [loadingDatabase, setLoadingDatabase] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // ESP32 state
+  const [esp32Url, setEsp32Url] = useState("");
+
   // Add face image picker
   const addFaceFileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAddFile, setSelectedAddFile] = useState<File | null>(null);
@@ -121,7 +124,36 @@ export function FaceIdTab() {
   };
 
   const verifyViaESP32 = async () => {
-    alert("ESP32 integration: fetch snapshot and call faceApi.verify(file)");
+    if (!esp32Url.trim()) {
+      setResult({
+        verified: false,
+        message: "Please enter the ESP32 camera address (e.g., http://192.168.1.100/capture)",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      // Fetch snapshot from ESP32
+      const snapshotFile = await faceApi.fetchESP32Snapshot(esp32Url);
+      // Verify the face
+      const response = await faceApi.verify(snapshotFile);
+      setResult({
+        verified: response.verified,
+        name: response.name,
+        confidence: response.confidence,
+        message: response.message,
+      });
+    } catch (err) {
+      setResult({
+        verified: false,
+        message: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Add a new face
@@ -214,18 +246,27 @@ export function FaceIdTab() {
               <p className="text-sm text-muted-foreground mb-4">
                 Verify using the ESP32 camera module connected to your system.
               </p>
-              <Button
-                onClick={verifyViaESP32}
-                disabled={loading}
-                className="w-full gap-2"
-              >
-                {loading ? (
-                  <Loader className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Cpu className="w-4 h-4" />
-                )}
-                Verify via ESP32
-              </Button>
+              <div className="space-y-3">
+                <Input
+                  type="text"
+                  placeholder="http://192.168.1.100/capture"
+                  value={esp32Url}
+                  onChange={(e) => setEsp32Url(e.target.value)}
+                  disabled={loading}
+                />
+                <Button
+                  onClick={verifyViaESP32}
+                  disabled={loading}
+                  className="w-full gap-2"
+                >
+                  {loading ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Cpu className="w-4 h-4" />
+                  )}
+                  Verify via ESP32
+                </Button>
+              </div>
             </TabsContent>
           </Tabs>
 
