@@ -1,9 +1,8 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import * as SliderPrimitive from '@radix-ui/react-slider'
-
-import { cn } from '@/lib/utils'
+import * as React from "react";
+import * as SliderPrimitive from "@radix-ui/react-slider";
+import { cn } from "@/lib/utils";
 
 function Slider({
   className,
@@ -11,8 +10,11 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  color = "green",
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
+}: React.ComponentProps<typeof SliderPrimitive.Root> & {
+  color?: "green" | "blue" | "red" | "purple";
+}) {
   const _values = React.useMemo(
     () =>
       Array.isArray(value)
@@ -21,7 +23,32 @@ function Slider({
           ? defaultValue
           : [min, max],
     [value, defaultValue, min, max],
-  )
+  );
+
+  const colors = {
+    green: {
+      range: "bg-green-500",
+      thumb: "border-green-500",
+      hover: "hover:ring-green-200",
+    },
+    blue: {
+      range: "bg-blue-500",
+      thumb: "border-blue-500",
+      hover: "hover:ring-blue-200",
+    },
+    red: {
+      range: "bg-red-500",
+      thumb: "border-red-500",
+      hover: "hover:ring-red-200",
+    },
+    purple: {
+      range: "bg-purple-500",
+      thumb: "border-purple-500",
+      hover: "hover:ring-purple-200",
+    },
+  };
+
+  const selectedColor = colors[color];
 
   return (
     <SliderPrimitive.Root
@@ -31,29 +58,37 @@ function Slider({
       min={min}
       max={max}
       className={cn(
-        'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
+        "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
         className,
       )}
       {...props}
     >
       <SliderPrimitive.Track
         data-slot="slider-track"
-        className="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+        className="bg-gray-200 relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5 dark:bg-gray-700"
       >
         <SliderPrimitive.Range
           data-slot="slider-range"
-          className="bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+          className={cn(
+            "absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full",
+            selectedColor.range,
+          )}
         />
       </SliderPrimitive.Track>
       {Array.from({ length: _values.length }, (_, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
-          className="border-primary ring-ring/50 block size-4 shrink-0 rounded-full border bg-white shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+          className={cn(
+            "block size-4 shrink-0 rounded-full bg-white border-2 shadow-sm transition-all",
+            selectedColor.thumb,
+            selectedColor.hover,
+            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50",
+          )}
         />
       ))}
     </SliderPrimitive.Root>
-  )
+  );
 }
 
-export { Slider }
+export { Slider };
