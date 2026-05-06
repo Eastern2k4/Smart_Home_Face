@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
   Upload,
-  Camera,
   Cpu,
   CheckCircle2,
   XCircle,
@@ -25,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { faceApi } from "@/lib/api/face";
+import { CameraTab } from "@/components/face-id/camera-tab";
 
 // Local type for the face database list (matches what we get from faceApi.getFaces)
 interface FaceInDatabase {
@@ -101,69 +101,23 @@ export function FaceIdTab() {
     }
   };
 
-  // Camera controls
-
-  const startCamera = async () => {
-    if (cameraActive) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        // Wait for video metadata to load before setting active
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch((e) => console.warn("Play error:", e));
-          setCameraActive(true);
-        };
-      }
-    } catch (error) {
-      console.error("Camera error:", error);
-      setResult({
-        verified: false,
-        message: "Camera access denied or not available.",
-      });
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-      videoRef.current.onloadedmetadata = null;
-    }
-    setCameraActive(false);
-  };
-
-  const captureAndVerify = async () => {
-    if (!videoRef.current) return;
+  // Add this handler function in FaceIdTab component
+  const handleCameraVerification = async (file: File) => {
     setLoading(true);
     setResult(null);
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-      try {
-        const response = await faceApi.verify(file);
-        setResult({
-          verified: response.verified,
-          name: response.name,
-          confidence: response.confidence,
-          message: response.message,
-        });
-      } catch (err) {
-        setResult({ verified: false, message: "Verification error" });
-      } finally {
-        setLoading(false);
-      }
-    }, "image/jpeg");
+    try {
+      const response = await faceApi.verify(file);
+      setResult({
+        verified: response.verified,
+        name: response.name,
+        confidence: response.confidence,
+        message: response.message,
+      });
+    } catch (err) {
+      setResult({ verified: false, message: "Verification error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verifyViaESP32 = async () => {
@@ -249,42 +203,11 @@ export function FaceIdTab() {
             </TabsContent>
 
             <TabsContent value="camera" className="space-y-4">
-              {!cameraActive ? (
-                <Button onClick={startCamera} className="w-full gap-2">
-                  <Camera className="w-4 h-4" />
-                  Start Camera
-                </Button>
-              ) : (
-                <>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full rounded-lg bg-black"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={captureAndVerify}
-                      disabled={loading}
-                      className="flex-1 gap-2"
-                    >
-                      {loading ? (
-                        <Loader className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Camera className="w-4 h-4" />
-                      )}
-                      Capture & Verify
-                    </Button>
-                    <Button
-                      onClick={stopCamera}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Stop
-                    </Button>
-                  </div>
-                </>
-              )}
+              <CameraTab
+                onVerify={handleCameraVerification}
+                loading={loading}
+                setLoading={setLoading}
+              />
             </TabsContent>
 
             <TabsContent value="esp32" className="space-y-4">
