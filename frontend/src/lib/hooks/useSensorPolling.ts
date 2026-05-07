@@ -14,34 +14,64 @@ export function useSensorPolling() {
       isPollingRef.current = true;
 
       try {
-        const [toiletDistance, kitchenDistance, gas, ledStatuses] =
-          await Promise.all([
-            sensorApi.getToiletDistance(),
-            sensorApi.getKitchenDistance(),
-            sensorApi.getGas(),
-            sensorApi.getLEDStatuses().catch(() => ({})),
-          ]);
+        // 1. Fetch all sensor data from ESP32
+        const sensors = await sensorApi.getAllSensors();
+        // Expected shape: { livingRoom: {temp, hum}, bedroom: {temp, hum}, kitchen: {distance}, wc: {distance}, gas: number }
+        store.setSensors(sensors);
 
-        // Update distances (triggers auto LED rules)
-        store.setToiletDistance(toiletDistance);
-        store.setKitchenDistance(kitchenDistance);
+        // 2. Fetch device states (LEDs + door)
+        const devices = await sensorApi.getDevices();
+        // Expected shape: { wcLight, kitchenLight, bedroomLight, doorOpen }
+        store.updateAllLeds({
+          wc: devices.wcLight,
+          kitchen: devices.kitchenLight,
+          bedroom: devices.bedroomLight,
+        });
+        store.setDoorState(devices.doorOpen);
 
-        // Update gas (triggers auto buzzer logic)
-        store.setGas(gas);
+        // Record readings for statistics
+        store.addDistanceReading("wc", sensors.wc.distance);
+        store.addDistanceReading("kitchen", sensors.kitchen.distance);
+        store.addGasReading(sensors.gas);
+        store.setDoorState(devices.doorOpen);
 
-        // Sync LED statuses from ESP32 (only for manual LED)
-        if (ledStatuses) {
-          const manualLed = store.leds.find((led) => led.id === "manualLed");
-          if (
-            manualLed &&
-            ledStatuses.manualLed !== undefined &&
-            !manualLed.autoMode
-          ) {
-            if (ledStatuses.manualLed !== manualLed.status) {
-              store.setLedStatus("manualLed", ledStatuses.manualLed);
-            }
+        const { leds, autoLed, ledThresholds, sensors: currentSensors } = store;
+
+        // Check WC auto
+        if (autoLed.wc) {
+          const shouldOn =
+            currentSensors.wc.distance < ledThresholds.wc &&
+            currentSensors.wc.distance !== -1;
+          if (shouldOn !== leds.wc) {
+            await sensorApi.toggleLED("wc", shouldOn);
+            store.setLedState("wc", shouldOn);
+            store.addEvent({
+              timestamp: new Date().toISOString(),
+              type: "led",
+              value: shouldOn ? 1 : 0,
+              action: `Auto WC light ${shouldOn ? "ON" : "OFF"} (distance ${currentSensors.wc.distance}cm)`,
+            });
           }
         }
+
+        // Check Kitchen auto
+        if (autoLed.kitchen) {
+          const shouldOn =
+            currentSensors.kitchen.distance < ledThresholds.kitchen &&
+            currentSensors.kitchen.distance !== -1;
+          if (shouldOn !== leds.kitchen) {
+            await sensorApi.toggleLED("kitchen", shouldOn);
+            store.setLedState("kitchen", shouldOn);
+            store.addEvent({
+              timestamp: new Date().toISOString(),
+              type: "led",
+              value: shouldOn ? 1 : 0,
+              action: `Auto kitchen light ${shouldOn ? "ON" : "OFF"} (distance ${currentSensors.kitchen.distance}cm)`,
+            });
+          }
+        }
+
+        // Note: bedroom has no ultrasonic sensor, so auto not applicable.
       } catch (error) {
         console.error("Polling error:", error);
       } finally {
@@ -49,11 +79,12 @@ export function useSensorPolling() {
       }
     };
 
+    // Start polling
     poll();
     intervalRef.current = setInterval(poll, store.pollingInterval * 1000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [store.pollingInterval]);
+  }, [store.pollingInterval]); // also add store methods as dependencies? Not needed because store is stable
 }
