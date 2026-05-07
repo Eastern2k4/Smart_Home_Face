@@ -8,8 +8,9 @@ Hệ thống nhận diện khuôn mặt tích hợp ESP32-CAM để mở cửa t
 - ✅ Lấy snapshot từ ESP32-CAM qua mạng Wi-Fi
 - ✅ Dùng camera máy tính để capture và xác thực
 - ✅ Quản lý cơ sở dữ liệu khuôn mặt
-- ✅ Giao diện web đẹp và dễ sử dụng
+- ✅ Giao diện web đẹp và dễ sử dụng (Flask + Next.js Frontend)
 - ✅ API endpoint để ESP32-CAM gửi ảnh tự động
+- ✅ Điều khiển thiết bị smart home (đèn, cảm biến, servo)
 
 ## 📋 Yêu cầu
 
