@@ -6,27 +6,48 @@ from urllib.parse import urlparse, urljoin
 import urllib.request
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__, template_folder='templates', static_folder='static')
+
+import pandas as pd  # add this at the top of app.py if not already
+import subprocess  # <-- add this
+
+app = Flask(__name__, template_folder="templates", static_folder="static")
+
+
+def curl_get(url, timeout=5):
+    """Fetch data using curl (bypasses Python socket issues)"""
+    cmd = ["curl", "-s", "-m", str(timeout), url]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, timeout=timeout + 1, check=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"curl failed (exit {e.returncode}): {e.stderr.decode()}")
+    except subprocess.TimeoutExpired:
+        raise Exception(f"curl timeout after {timeout}s")
+
 
 # CORS headers
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
     return response
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces")
 TEMP_PATH = os.path.join(BASE_DIR, "temp")
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 os.makedirs(DB_PATH, exist_ok=True)
 os.makedirs(TEMP_PATH, exist_ok=True)
 
+
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def extract_identity_from_path(file_path):
@@ -44,76 +65,77 @@ def extract_identity_from_path(file_path):
 
 @app.route("/")
 def home():
-    return render_template('index.html')
+    return render_template("index.html")
+
 
 @app.route("/verify-face", methods=["POST", "OPTIONS"])
 def verify_face():
-    """Verify a face against the database"""
     if request.method == "OPTIONS":
         return jsonify({"status": "ok"}), 200
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
     file = request.files["image"]
-    
-    if file.filename == '':
+    if file.filename == "":
         return jsonify({"error": "No file selected"}), 400
-
     if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type. Allowed: PNG, JPG, JPEG, GIF, BMP"}), 400
+        return jsonify({"error": "Invalid file type"}), 400
 
-    if len(file.read()) > MAX_FILE_SIZE:
-        return jsonify({"error": "File too large. Maximum: 10MB"}), 400
-    
-    file.seek(0)
+    # Save uploaded image to temp
     temp_path = os.path.join(TEMP_PATH, "verify_temp.jpg")
-    
+    file.save(temp_path)
+
     try:
-        file.save(temp_path)
+        best_match = None
+        min_distance = 1.0  # lower is better
 
-        result = DeepFace.find(
-            img_path=temp_path,
-            db_path=DB_PATH,
-            model_name="ArcFace",
-            detector_backend="opencv",
-            enforce_detection=False,
-            silent=True
-        )
+        # Iterate over all face directories
+        for person in os.listdir(DB_PATH):
+            person_path = os.path.join(DB_PATH, person)
+            if not os.path.isdir(person_path):
+                continue
+            for img_file in os.listdir(person_path):
+                if not allowed_file(img_file):
+                    continue
+                db_image = os.path.join(person_path, img_file)
+                try:
+                    # Verify against each database image
+                    result = DeepFace.verify(
+                        img1_path=temp_path,
+                        img2_path=db_image,
+                        model_name="ArcFace",
+                        detector_backend="opencv",
+                        enforce_detection=False,
+                        # silent is NOT allowed here – remove it
+                    )
+                    if result.get("verified"):
+                        distance = result.get("distance", 1.0)
+                        if distance < min_distance:
+                            min_distance = distance
+                            best_match = {
+                                "identity": person,
+                                "distance": distance,
+                                "threshold": result.get("threshold"),
+                                # "confidence": result.get("confidence"),
+                                "similarity_metric": result.get("similarity_metric"),
+                            }
+                except Exception as e:
+                    # Skip any image that causes an error
+                    print(f"Error comparing with {db_image}: {e}")
+                    continue
 
-        if len(result) > 0 and not result[0].empty:
-            best_match = result[0].iloc[0].to_dict()
-            match_image_path = best_match.get('identity')
-
-            if match_image_path:
-                verify_result = DeepFace.verify(
-                    img1_path=temp_path,
-                    img2_path=match_image_path,
-                    model_name="ArcFace",
-                    detector_backend="opencv",
-                    enforce_detection=False,
-                    silent=True
-                )
-
-                best_match['verified'] = verify_result.get('verified', False)
-                best_match['confidence'] = verify_result.get('confidence', None)
-                best_match['distance'] = verify_result.get('distance', None)
-                best_match['threshold'] = verify_result.get('threshold', None)
-                best_match['similarity_metric'] = verify_result.get('similarity_metric', None)
-
-                best_match['identity'] = extract_identity_from_path(match_image_path)
-
-                if best_match['verified']:
-                    return jsonify({"match": True, "best_match": best_match})
-                else:
-                    return jsonify({"match": False, "best_match": best_match})
-
-        return jsonify({"match": False})
+        if best_match:
+            return jsonify({"match": True, "best_match": best_match})
+        else:
+            return jsonify({"match": False})
 
     except Exception as e:
+        print("Verification error:", e)
         return jsonify({"error": str(e)}), 500
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
 
 @app.route("/add-face", methods=["POST", "OPTIONS"])
 def add_face():
@@ -122,14 +144,14 @@ def add_face():
         return jsonify({"status": "ok"}), 200
     if "image" not in request.files:
         return jsonify({"success": False, "error": "No image uploaded"}), 400
-    
+
     if "name" not in request.form:
         return jsonify({"success": False, "error": "No name provided"}), 400
 
     file = request.files["image"]
     name = request.form["name"].strip()
 
-    if file.filename == '':
+    if file.filename == "":
         return jsonify({"success": False, "error": "No file selected"}), 400
 
     if not allowed_file(file.filename):
@@ -148,10 +170,13 @@ def add_face():
         filepath = os.path.join(face_dir, filename)
         file.save(filepath)
 
-        return jsonify({"success": True, "message": f"Face '{name}' added successfully"})
+        return jsonify(
+            {"success": True, "message": f"Face '{name}' added successfully"}
+        )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route("/delete-face", methods=["POST", "OPTIONS"])
 def delete_face():
@@ -171,10 +196,13 @@ def delete_face():
             return jsonify({"success": False, "error": "Face not found"}), 404
 
         shutil.rmtree(face_dir)
-        return jsonify({"success": True, "message": f"Face '{name}' deleted successfully"})
+        return jsonify(
+            {"success": True, "message": f"Face '{name}' deleted successfully"}
+        )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route("/get-faces", methods=["GET"])
 def get_faces():
@@ -195,6 +223,7 @@ def get_faces():
     except Exception as e:
         return jsonify({"faces": [], "error": str(e)})
 
+
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
     """Get database statistics"""
@@ -210,13 +239,13 @@ def get_stats():
                         full_path = os.path.join(root, file)
                         face_identities.add(extract_identity_from_path(full_path))
 
-        return jsonify({
-            "total_people": len(face_identities),
-            "total_images": image_count
-        })
+        return jsonify(
+            {"total_people": len(face_identities), "total_images": image_count}
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/esp32/snapshot", methods=["GET"])
 def esp32_snapshot():
@@ -224,34 +253,34 @@ def esp32_snapshot():
     if not camera_url:
         return jsonify({"error": "camera_url query parameter is required"}), 400
 
-    parsed_url = urlparse(camera_url)
-    if parsed_url.scheme not in ("http", "https"):
-        return jsonify({"error": "camera_url must start with http:// or https://"}), 400
+    # Optional: ensure the URL ends with /capture
+    from urllib.parse import urlparse, urljoin
 
+    parsed_url = urlparse(camera_url)
     if not parsed_url.path or parsed_url.path == "/":
         camera_url = urljoin(camera_url, "/capture")
 
     try:
-        with urllib.request.urlopen(camera_url, timeout=10) as resp:
-            content_type = resp.headers.get("Content-Type", "image/jpeg")
-            image_data = resp.read()
-            return Response(image_data, content_type=content_type)
+        # Use curl instead of urllib
+        image_data = curl_get(camera_url, timeout=10)
+        return Response(image_data, content_type="image/jpeg")
     except Exception as e:
         return jsonify({"error": f"Failed to fetch ESP32 snapshot: {str(e)}"}), 500
 
-@app.route('/upload', methods=['POST'])
+
+@app.route("/upload", methods=["POST"])
 def upload_frame():
     image_data = request.data
     if not image_data:
         return jsonify({"error": "No image data received"}), 400
 
-    content_type = request.headers.get('Content-Type', '')
-    if 'jpeg' not in content_type.lower() and 'jpg' not in content_type.lower():
+    content_type = request.headers.get("Content-Type", "")
+    if "jpeg" not in content_type.lower() and "jpg" not in content_type.lower():
         return jsonify({"error": "Upload must be JPEG image data"}), 400
 
-    temp_path = os.path.join(TEMP_PATH, 'esp32_upload.jpg')
+    temp_path = os.path.join(TEMP_PATH, "esp32_upload.jpg")
     try:
-        with open(temp_path, 'wb') as f:
+        with open(temp_path, "wb") as f:
             f.write(image_data)
 
         result = DeepFace.find(
@@ -260,12 +289,12 @@ def upload_frame():
             model_name="ArcFace",
             detector_backend="opencv",
             enforce_detection=False,
-            silent=True
+            silent=True,
         )
 
         if len(result) > 0 and not result[0].empty:
             best_match = result[0].iloc[0].to_dict()
-            match_image_path = best_match.get('identity')
+            match_image_path = best_match.get("identity")
             if match_image_path:
                 verify_result = DeepFace.verify(
                     img1_path=temp_path,
@@ -273,15 +302,19 @@ def upload_frame():
                     model_name="ArcFace",
                     detector_backend="opencv",
                     enforce_detection=False,
-                    silent=True
+                    silent=True,
                 )
-                best_match['verified'] = verify_result.get('verified', False)
-                best_match['confidence'] = verify_result.get('confidence', None)
-                best_match['distance'] = verify_result.get('distance', None)
-                best_match['threshold'] = verify_result.get('threshold', None)
-                best_match['similarity_metric'] = verify_result.get('similarity_metric', None)
-                best_match['identity'] = extract_identity_from_path(match_image_path)
-                return jsonify({"match": best_match['verified'], "best_match": best_match})
+                best_match["verified"] = verify_result.get("verified", False)
+                best_match["confidence"] = verify_result.get("confidence", None)
+                best_match["distance"] = verify_result.get("distance", None)
+                best_match["threshold"] = verify_result.get("threshold", None)
+                best_match["similarity_metric"] = verify_result.get(
+                    "similarity_metric", None
+                )
+                best_match["identity"] = extract_identity_from_path(match_image_path)
+                return jsonify(
+                    {"match": best_match["verified"], "best_match": best_match}
+                )
 
         return jsonify({"match": False})
 
@@ -291,5 +324,6 @@ def upload_frame():
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5001)
