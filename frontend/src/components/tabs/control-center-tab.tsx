@@ -127,7 +127,7 @@ export function ControlCenterTab() {
                 {store.distance1 < store.leds[0].threshold &&
                   store.leds[0].autoMode && (
                     <div className="text-green-600 text-xs font-medium">
-                      ✅ Currently within range - LED should be ON
+                      Currently within range - LED should be ON
                     </div>
                   )}
               </div>
@@ -180,7 +180,7 @@ export function ControlCenterTab() {
                 {store.distance2 < store.leds[1].threshold &&
                   store.leds[1].autoMode && (
                     <div className="text-green-600 text-xs font-medium">
-                      ✅ Currently within range - LED should be ON
+                      Currently within range - LED should be ON
                     </div>
                   )}
               </div>

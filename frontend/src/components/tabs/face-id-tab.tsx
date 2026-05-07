@@ -1,3 +1,4 @@
+// components/tabs/face-id-tab.tsx
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -25,6 +26,7 @@ import {
 
 import { faceApi } from "@/lib/api/face";
 import { CameraTab } from "@/components/face-id/camera-tab";
+import { ESP32Tab } from "@/components/face-id/esp32-tab";
 
 // Local type for the face database list (matches what we get from faceApi.getFaces)
 interface FaceInDatabase {
@@ -43,8 +45,6 @@ export function FaceIdTab() {
     confidence?: number;
     message: string;
   } | null>(null);
-  const [cameraActive, setCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Database state
@@ -101,7 +101,7 @@ export function FaceIdTab() {
     }
   };
 
-  // Add this handler function in FaceIdTab component
+  // Camera verification handler
   const handleCameraVerification = async (file: File) => {
     setLoading(true);
     setResult(null);
@@ -120,8 +120,23 @@ export function FaceIdTab() {
     }
   };
 
-  const verifyViaESP32 = async () => {
-    alert("ESP32 integration: fetch snapshot and call faceApi.verify(file)");
+  // ESP32 verification handler
+  const handleESP32Verification = async (file: File) => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const response = await faceApi.verify(file);
+      setResult({
+        verified: response.verified,
+        name: response.name,
+        confidence: response.confidence,
+        message: response.message,
+      });
+    } catch (err) {
+      setResult({ verified: false, message: "Verification error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Add a new face
@@ -211,21 +226,11 @@ export function FaceIdTab() {
             </TabsContent>
 
             <TabsContent value="esp32" className="space-y-4">
-              <p className="text-sm text-muted-foreground mb-4">
-                Verify using the ESP32 camera module connected to your system.
-              </p>
-              <Button
-                onClick={verifyViaESP32}
-                disabled={loading}
-                className="w-full gap-2"
-              >
-                {loading ? (
-                  <Loader className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Cpu className="w-4 h-4" />
-                )}
-                Verify via ESP32
-              </Button>
+              <ESP32Tab
+                onVerify={handleESP32Verification}
+                loading={loading}
+                setLoading={setLoading}
+              />
             </TabsContent>
           </Tabs>
 

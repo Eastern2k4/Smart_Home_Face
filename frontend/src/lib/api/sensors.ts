@@ -1,37 +1,51 @@
 // lib/api/sensors.ts
-import { SensorReading, GasSensorReading } from "@/lib/types";
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const API_BASE =
+  process.env.NEXT_PUBLIC_SENSOR_API_URL || "http://localhost:5001";
 
 export const sensorApi = {
-  async getUltrasonic(): Promise<SensorReading> {
-    await delay(300);
-    return {
-      distance: Math.floor(Math.random() * 400) + 5,
-      unit: "cm",
-      timestamp: new Date().toISOString(),
-    };
+  // Ultrasonic sensors
+  async getToiletDistance(): Promise<number> {
+    const res = await fetch(`${API_BASE}/api/toilet_ultrasonic`);
+    const data = await res.json();
+    return data.distance;
   },
 
-  async toggleLED(state: boolean): Promise<{ ledState: boolean }> {
-    await delay(200);
-    return { ledState: state };
+  async getKitchenDistance(): Promise<number> {
+    const res = await fetch(`${API_BASE}/api/kitchen_ultrasonic`);
+    const data = await res.json();
+    return data.distance;
   },
 
-  async getGas(): Promise<GasSensorReading> {
-    await delay(400);
-    const ppm = Math.floor(Math.random() * 500) + 10;
-    let level: GasSensorReading["level"] = "safe";
-    if (ppm > 300) level = "alert";
-    else if (ppm > 150) level = "warning";
-    return { ppm, level, timestamp: new Date().toISOString() };
+  // Gas sensor
+  async getGas(): Promise<number> {
+    const res = await fetch(`${API_BASE}/api/gas`);
+    const data = await res.json();
+    return data.ppm;
   },
 
-  async triggerBuzzer(durationMs = 500): Promise<void> {
-    await delay(durationMs);
+  // LED control
+  async toggleLED(ledId: string, state: boolean): Promise<void> {
+    await fetch(`${API_BASE}/api/led/${ledId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: state ? 1 : 0 }),
+    });
+  },
+
+  async getLEDStatuses(): Promise<Record<string, boolean>> {
+    const res = await fetch(`${API_BASE}/api/leds`);
+    return res.json();
+  },
+
+  // Buzzer control
+  async triggerBuzzer(durationMs: number): Promise<void> {
+    await fetch(`${API_BASE}/api/buzzer`, {
+      method: "POST",
+      body: JSON.stringify({ duration: durationMs }),
+    });
   },
 
   async muteBuzzer(): Promise<void> {
-    await delay(100);
+    await fetch(`${API_BASE}/api/buzzer/mute`, { method: "POST" });
   },
 };

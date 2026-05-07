@@ -1,3 +1,4 @@
+// lib/store.ts
 "use client";
 
 import { create } from "zustand";
@@ -15,15 +16,15 @@ export interface LedConfig {
   status: boolean;
   autoMode: boolean;
   threshold: number;
-  ultrasonicId: string; // 'ultrasonic1' or 'ultrasonic2'
+  ultrasonicId: string | null; // 'toilet' | 'kitchen' | null (null = manual only)
 }
 
 export interface SensorData {
-  // Ultrasonic sensors (2 of them)
-  distance1: number;
-  distance2: number;
+  // Ultrasonic sensors
+  toiletDistance: number;
+  kitchenDistance: number;
 
-  // LEDs (3 of them)
+  // LEDs
   leds: LedConfig[];
 
   // Gas sensor
@@ -37,8 +38,8 @@ export interface SensorData {
 
 interface Store extends SensorData {
   // Setters for ultrasonic sensors
-  setDistance1: (distance: number) => void;
-  setDistance2: (distance: number) => void;
+  setToiletDistance: (distance: number) => void;
+  setKitchenDistance: (distance: number) => void;
 
   // Setters for LEDs
   setLedStatus: (ledId: string, status: boolean) => void;
@@ -68,8 +69,8 @@ interface Store extends SensorData {
 
 export const useStore = create<Store>((set, get) => ({
   // Initial sensor data
-  distance1: 0,
-  distance2: 0,
+  toiletDistance: 0,
+  kitchenDistance: 0,
 
   gas: 0,
   buzzerStatus: false,
@@ -81,39 +82,40 @@ export const useStore = create<Store>((set, get) => ({
   // 3 LEDs configuration
   leds: [
     {
-      id: "led1",
-      name: "LED 1",
+      id: "toiletLed",
+      name: "Toilet LED",
       status: false,
       autoMode: false,
       threshold: 30,
-      ultrasonicId: "ultrasonic1",
+      ultrasonicId: "toilet", // Controlled by toilet sensor
     },
     {
-      id: "led2",
-      name: "LED 2",
+      id: "kitchenLed",
+      name: "Kitchen LED",
       status: false,
       autoMode: false,
       threshold: 50,
-      ultrasonicId: "ultrasonic1",
+      ultrasonicId: "kitchen", // Controlled by kitchen sensor
     },
     {
-      id: "led3",
-      name: "LED 3",
+      id: "manualLed",
+      name: "Manual LED",
       status: false,
-      autoMode: false,
-      threshold: 100,
-      ultrasonicId: "ultrasonic2",
+      autoMode: false, // Always false - manual only
+      threshold: 0,
+      ultrasonicId: null, // No sensor control - manual only
     },
   ],
 
   // Setters for ultrasonic sensors
-  setDistance1: (distance) => {
-    set({ distance1: distance });
+  setToiletDistance: (distance) => {
+    set({ toiletDistance: distance });
+    get().addDistanceReading(distance);
 
-    // Check auto mode for LEDs controlled by ultrasonic1
+    // Check auto mode for LEDs controlled by toilet sensor
     const { leds } = get();
     leds.forEach((led) => {
-      if (led.autoMode && led.ultrasonicId === "ultrasonic1") {
+      if (led.autoMode && led.ultrasonicId === "toilet") {
         const shouldBeOn = distance < led.threshold;
         if (shouldBeOn !== led.status) {
           // Update LED status in store
@@ -128,20 +130,21 @@ export const useStore = create<Store>((set, get) => ({
             timestamp: new Date().toISOString(),
             type: "led",
             value: shouldBeOn ? 1 : 0,
-            action: `${led.name} automatically turned ${shouldBeOn ? "ON" : "OFF"} (distance: ${distance}cm < ${led.threshold}cm)`,
+            action: `${led.name} automatically turned ${shouldBeOn ? "ON" : "OFF"} (Toilet distance: ${distance}cm < ${led.threshold}cm)`,
           });
         }
       }
     });
   },
 
-  setDistance2: (distance) => {
-    set({ distance2: distance });
+  setKitchenDistance: (distance) => {
+    set({ kitchenDistance: distance });
+    get().addDistanceReading(distance);
 
-    // Check auto mode for LEDs controlled by ultrasonic2
+    // Check auto mode for LEDs controlled by kitchen sensor
     const { leds } = get();
     leds.forEach((led) => {
-      if (led.autoMode && led.ultrasonicId === "ultrasonic2") {
+      if (led.autoMode && led.ultrasonicId === "kitchen") {
         const shouldBeOn = distance < led.threshold;
         if (shouldBeOn !== led.status) {
           // Update LED status in store
@@ -156,7 +159,7 @@ export const useStore = create<Store>((set, get) => ({
             timestamp: new Date().toISOString(),
             type: "led",
             value: shouldBeOn ? 1 : 0,
-            action: `${led.name} automatically turned ${shouldBeOn ? "ON" : "OFF"} (distance: ${distance}cm < ${led.threshold}cm)`,
+            action: `${led.name} automatically turned ${shouldBeOn ? "ON" : "OFF"} (Kitchen distance: ${distance}cm < ${led.threshold}cm)`,
           });
         }
       }
@@ -173,6 +176,9 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   setLedAutoMode: (ledId, mode) => {
+    // Manual LED cannot have auto mode
+    if (ledId === "manualLed") return;
+
     set((state) => ({
       leds: state.leds.map((led) =>
         led.id === ledId ? { ...led, autoMode: mode } : led,
@@ -181,11 +187,11 @@ export const useStore = create<Store>((set, get) => ({
 
     // When enabling auto mode, immediately check current distance
     if (mode) {
-      const { leds, distance1, distance2 } = get();
+      const { leds, toiletDistance, kitchenDistance } = get();
       const led = leds.find((l) => l.id === ledId);
-      if (led) {
+      if (led && led.ultrasonicId) {
         const currentDistance =
-          led.ultrasonicId === "ultrasonic1" ? distance1 : distance2;
+          led.ultrasonicId === "toilet" ? toiletDistance : kitchenDistance;
         const shouldBeOn = currentDistance < led.threshold;
         if (shouldBeOn !== led.status) {
           get().setLedStatus(ledId, shouldBeOn);
@@ -208,11 +214,11 @@ export const useStore = create<Store>((set, get) => ({
     }));
 
     // Check if threshold change affects current LED state
-    const { leds, distance1, distance2 } = get();
+    const { leds, toiletDistance, kitchenDistance } = get();
     const led = leds.find((l) => l.id === ledId);
-    if (led && led.autoMode) {
+    if (led && led.autoMode && led.ultrasonicId) {
       const currentDistance =
-        led.ultrasonicId === "ultrasonic1" ? distance1 : distance2;
+        led.ultrasonicId === "toilet" ? toiletDistance : kitchenDistance;
       const shouldBeOn = currentDistance < threshold;
       if (shouldBeOn !== led.status) {
         get().setLedStatus(ledId, shouldBeOn);
