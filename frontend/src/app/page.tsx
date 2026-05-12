@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -11,7 +11,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
+} from "recharts";
 import {
   Bell,
   Camera,
@@ -35,55 +35,63 @@ import {
   Video,
   Wifi,
   Zap,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { useStore } from '@/lib/store';
-import { sensorApi } from '@/lib/api/sensors';
-import { faceApi } from '@/lib/api/face';
-import { useSensorPolling } from '@/lib/hooks/useSensorPolling';
-import { useAutoLED } from '@/lib/hooks/useAutoLED';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { useStore } from "@/lib/store";
+import { sensorApi } from "@/lib/api/sensors";
+import { faceApi } from "@/lib/api/face";
+import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
+import { useAutoLED } from "@/lib/hooks/useAutoLED";
+import { cn } from "@/lib/utils";
 
-type PageId = 'overview' | 'sensors' | 'lights' | 'camera' | 'face-id' | 'speakers' | 'alerts' | 'settings';
+type PageId =
+  | "overview"
+  | "sensors"
+  | "lights"
+  | "camera"
+  | "face-id"
+  | "speakers"
+  | "alerts"
+  | "settings";
 
 const navItems: Array<{ id: PageId; label: string; icon: typeof Home }> = [
-  { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'sensors', label: 'Cảm biến', icon: Thermometer },
-  { id: 'lights', label: 'Đèn', icon: Lightbulb },
-  { id: 'camera', label: 'Cửa ra vào', icon: Camera },
-  { id: 'face-id', label: 'Face ID', icon: UserCheck },
-  { id: 'speakers', label: 'Loa', icon: Speaker },
-  { id: 'alerts', label: 'Cảnh báo', icon: Bell },
-  { id: 'settings', label: 'Cài đặt', icon: Settings },
+  { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
+  { id: "sensors", label: "Cảm biến", icon: Thermometer },
+  { id: "lights", label: "Đèn", icon: Lightbulb },
+  { id: "camera", label: "Cửa ra vào", icon: Camera },
+  { id: "face-id", label: "Face ID", icon: UserCheck },
+  { id: "speakers", label: "Loa", icon: Speaker },
+  { id: "alerts", label: "Cảnh báo", icon: Bell },
+  { id: "settings", label: "Cài đặt", icon: Settings },
 ];
 
 const titles: Record<PageId, string> = {
-  overview: 'Tổng quan',
-  sensors: 'Cảm biến',
-  lights: 'Điều khiển đèn',
-  camera: 'Cửa ra vào',
-  'face-id': 'Face ID',
-  speakers: 'Hệ thống loa',
-  alerts: 'Cảnh báo',
-  settings: 'Cài đặt',
+  overview: "Tổng quan",
+  sensors: "Cảm biến",
+  lights: "Điều khiển đèn",
+  camera: "Cửa ra vào",
+  "face-id": "Face ID",
+  speakers: "Hệ thống loa",
+  alerts: "Cảnh báo",
+  settings: "Cài đặt",
 };
 
 function formatDate() {
-  return new Date().toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
+  return new Date().toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
 function sensorStatus(value: number, warning: number, danger: number) {
-  if (value >= danger) return 'danger';
-  if (value >= warning) return 'warning';
-  return 'normal';
+  if (value >= danger) return "danger";
+  if (value >= warning) return "warning";
+  return "normal";
 }
 
 function StatCard({
@@ -91,42 +99,58 @@ function StatCard({
   value,
   unit,
   icon: Icon,
-  status = 'normal',
+  status = "normal",
   badge,
 }: {
   title: string;
   value: string | number;
   unit?: string;
   icon: typeof Home;
-  status?: 'normal' | 'warning' | 'danger';
+  status?: "normal" | "warning" | "danger";
   badge?: string;
 }) {
   const tone = {
-    normal: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    danger: 'bg-destructive/10 text-destructive',
+    normal: "bg-success/10 text-success",
+    warning: "bg-warning/10 text-warning",
+    danger: "bg-destructive/10 text-destructive",
   }[status];
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/50">
       <div className="flex items-start justify-between">
-        <div className={cn('rounded-xl p-3', tone)}>
+        <div className={cn("rounded-xl p-3", tone)}>
           <Icon className="h-6 w-6" />
         </div>
-        {badge && <span className={cn('rounded-full px-3 py-1 text-sm font-semibold', tone)}>{badge}</span>}
+        {badge && (
+          <span
+            className={cn("rounded-full px-3 py-1 text-sm font-semibold", tone)}
+          >
+            {badge}
+          </span>
+        )}
       </div>
       <div className="mt-7">
         <p className="text-lg text-muted-foreground">{title}</p>
         <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-5xl font-bold leading-none text-foreground">{value}</span>
-          {unit && <span className="text-xl text-muted-foreground">{unit}</span>}
+          <span className="text-5xl font-bold leading-none text-foreground">
+            {value}
+          </span>
+          {unit && (
+            <span className="text-xl text-muted-foreground">{unit}</span>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function DoorCameraCard({ doorOpen }: { doorOpen: boolean }) {
+function DoorCameraCard({
+  doorOpen,
+  streamUrl,
+}: {
+  doorOpen: boolean;
+  streamUrl: string;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border p-6">
@@ -135,25 +159,49 @@ function DoorCameraCard({ doorOpen }: { doorOpen: boolean }) {
             <Camera className="h-5 w-5 text-success" />
           </div>
           <div>
-            <h3 className="text-2xl font-semibold text-foreground">ESP32-CAM - Cửa ra vào</h3>
+            <h3 className="text-2xl font-semibold text-foreground">
+              ESP32-CAM - Cửa ra vào
+            </h3>
             <p className="text-success">Trực tuyến</p>
           </div>
         </div>
         <div className="flex items-center gap-4 text-muted-foreground">
-          {doorOpen ? <DoorOpen className="h-5 w-5 text-success" /> : <DoorClosed className="h-5 w-5" />}
+          {doorOpen ? (
+            <DoorOpen className="h-5 w-5 text-success" />
+          ) : (
+            <DoorClosed className="h-5 w-5" />
+          )}
           <Video className="h-5 w-5" />
         </div>
       </div>
-      <div className="flex min-h-[360px] items-center justify-center bg-background/45">
-        <div className="text-center text-muted-foreground">
-          <Camera className="mx-auto mb-5 h-16 w-16 opacity-60" />
-          <p className="text-xl">Luồng camera cửa ra vào</p>
-          <p className="mt-2 text-sm">ESP32-CAM dùng để xác thực khuôn mặt và mở cửa</p>
-        </div>
+      <div className="overflow-hidden bg-black">
+        {streamUrl ? (
+          <div className="flex justify-center bg-black py-6">
+            <img
+              src={streamUrl}
+              alt="ESP32 Stream"
+              className="
+      aspect-square
+      w-[420px]
+      object-contain
+      rounded-xl
+      bg-black
+    "
+            />
+          </div>
+        ) : (
+          <div className="flex h-[360px] items-center justify-center text-muted-foreground">
+            Loading camera stream...
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-3 border-t border-border px-6 py-4">
-        <span className="rounded bg-background px-3 py-1 text-xs font-bold">LIVE</span>
-        <span className="rounded bg-background px-3 py-1 text-xs font-bold">{doorOpen ? 'DOOR OPEN' : 'DOOR CLOSED'}</span>
+        <span className="rounded bg-background px-3 py-1 text-xs font-bold">
+          LIVE
+        </span>
+        <span className="rounded bg-background px-3 py-1 text-xs font-bold">
+          {doorOpen ? "DOOR OPEN" : "DOOR CLOSED"}
+        </span>
       </div>
     </div>
   );
@@ -171,23 +219,40 @@ function LightCard({
   onThresholdChange,
   busy = false,
 }: {
-  id: 'wc' | 'kitchen' | 'bedroom';
+  id: "wc" | "kitchen" | "bedroom";
   name: string;
   room: string;
   enabled: boolean;
   autoMode?: boolean;
   threshold?: number;
-  onToggle: (id: 'wc' | 'kitchen' | 'bedroom', checked: boolean) => void;
+  onToggle: (id: "wc" | "kitchen" | "bedroom", checked: boolean) => void;
   onAutoChange?: (checked: boolean) => void;
   onThresholdChange?: (value: number) => void;
   busy?: boolean;
 }) {
   return (
-    <div className={cn('rounded-xl border bg-card p-7 transition-all', enabled ? 'border-primary shadow-lg shadow-primary/10' : 'border-border')}>
+    <div
+      className={cn(
+        "rounded-xl border bg-card p-7 transition-all",
+        enabled
+          ? "border-primary shadow-lg shadow-primary/10"
+          : "border-border",
+      )}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <div className={cn('rounded-xl p-4', enabled ? 'bg-primary/20' : 'bg-muted')}>
-            <Lightbulb className={cn('h-7 w-7', enabled ? 'text-primary' : 'text-muted-foreground')} />
+          <div
+            className={cn(
+              "rounded-xl p-4",
+              enabled ? "bg-primary/20" : "bg-muted",
+            )}
+          >
+            <Lightbulb
+              className={cn(
+                "h-7 w-7",
+                enabled ? "text-primary" : "text-muted-foreground",
+              )}
+            />
           </div>
           <div>
             <h3 className="text-2xl font-semibold text-foreground">{name}</h3>
@@ -197,11 +262,20 @@ function LightCard({
         <Button
           size="lg"
           disabled={busy}
-          className={cn('h-14 rounded-full px-5', enabled ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-muted text-muted-foreground hover:bg-secondary')}
+          className={cn(
+            "h-14 rounded-full px-5",
+            enabled
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+              : "bg-muted text-muted-foreground hover:bg-secondary",
+          )}
           onClick={() => onToggle(id, !enabled)}
         >
-          {busy ? <Loader className="mr-2 h-5 w-5 animate-spin" /> : <Zap className="mr-2 h-5 w-5" />}
-          {enabled ? 'Tắt' : 'Bật'}
+          {busy ? (
+            <Loader className="mr-2 h-5 w-5 animate-spin" />
+          ) : (
+            <Zap className="mr-2 h-5 w-5" />
+          )}
+          {enabled ? "Tắt" : "Bật"}
         </Button>
       </div>
 
@@ -216,9 +290,17 @@ function LightCard({
         <div className="mt-6 space-y-3">
           <div className="flex justify-between text-lg">
             <span className="text-muted-foreground">Ngưỡng bật</span>
-            <span className="font-semibold text-foreground">{threshold} cm</span>
+            <span className="font-semibold text-foreground">
+              {threshold} cm
+            </span>
           </div>
-          <Slider value={[threshold]} min={1} max={80} step={1} onValueChange={([value]) => onThresholdChange(value)} />
+          <Slider
+            value={[threshold]}
+            min={1}
+            max={80}
+            step={1}
+            onValueChange={([value]) => onThresholdChange(value)}
+          />
         </div>
       )}
     </div>
@@ -227,7 +309,7 @@ function LightCard({
 
 function FaceIdPanel() {
   const store = useStore();
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -235,7 +317,7 @@ function FaceIdPanel() {
 
   const addFace = async () => {
     if (!name.trim() || !selectedFile) {
-      setMessage('Nhập tên và chọn ảnh khuôn mặt trước.');
+      setMessage("Nhập tên và chọn ảnh khuôn mặt trước.");
       return;
     }
     setLoading(true);
@@ -243,16 +325,16 @@ function FaceIdPanel() {
       await faceApi.addFace(name.trim(), selectedFile);
       store.addEvent({
         timestamp: new Date().toISOString(),
-        type: 'door',
+        type: "door",
         value: 1,
         action: `Added ${name.trim()} to Face ID dataset`,
       });
-      setName('');
+      setName("");
       setSelectedFile(null);
-      if (fileRef.current) fileRef.current.value = '';
-      setMessage('Đã thêm khuôn mặt vào dataset.');
+      if (fileRef.current) fileRef.current.value = "";
+      setMessage("Đã thêm khuôn mặt vào dataset.");
     } catch {
-      setMessage('Không thể thêm khuôn mặt. Kiểm tra backend Face ID.');
+      setMessage("Không thể thêm khuôn mặt. Kiểm tra backend Face ID.");
     } finally {
       setLoading(false);
     }
@@ -262,31 +344,70 @@ function FaceIdPanel() {
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.8fr]">
       <div className="rounded-xl border border-border bg-card p-8">
         <h2 className="text-2xl font-bold">Thêm Face ID vào dataset</h2>
-        <p className="mt-2 text-lg text-muted-foreground">Dùng ảnh khuôn mặt để đăng ký người được phép mở cửa.</p>
+        <p className="mt-2 text-lg text-muted-foreground">
+          Dùng ảnh khuôn mặt để đăng ký người được phép mở cửa.
+        </p>
         <div className="mt-8 grid gap-4">
-          <Input className="h-14 rounded-2xl bg-secondary text-lg" placeholder="Tên người dùng" value={name} onChange={(event) => setName(event.target.value)} />
+          <Input
+            className="h-14 rounded-2xl bg-secondary text-lg"
+            placeholder="Tên người dùng"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
           <button
             className="rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-10 text-center transition-colors hover:bg-primary/10"
             onClick={() => fileRef.current?.click()}
             type="button"
           >
             <Upload className="mx-auto mb-3 h-10 w-10 text-primary" />
-            <p className="font-semibold">{selectedFile ? selectedFile.name : 'Chọn ảnh khuôn mặt'}</p>
+            <p className="font-semibold">
+              {selectedFile ? selectedFile.name : "Chọn ảnh khuôn mặt"}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">JPG hoặc PNG</p>
           </button>
-          <input ref={fileRef} className="hidden" type="file" accept="image/*" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
-          <Button className="h-14 rounded-2xl text-lg" onClick={addFace} disabled={loading}>
-            {loading ? <Loader className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
+          <input
+            ref={fileRef}
+            className="hidden"
+            type="file"
+            accept="image/*"
+            onChange={(event) =>
+              setSelectedFile(event.target.files?.[0] ?? null)
+            }
+          />
+          <Button
+            className="h-14 rounded-2xl text-lg"
+            onClick={addFace}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-5 w-5" />
+            )}
             Thêm vào dataset
           </Button>
-          {message && <p className="rounded-xl bg-secondary p-4 text-muted-foreground">{message}</p>}
+          {message && (
+            <p className="rounded-xl bg-secondary p-4 text-muted-foreground">
+              {message}
+            </p>
+          )}
         </div>
       </div>
       <div className="rounded-xl border border-border bg-card p-8">
         <h2 className="text-2xl font-bold">Trạng thái cửa</h2>
-        <p className="mt-2 text-lg text-muted-foreground">{store.doorOpen ? 'Cửa đang mở' : 'Cửa đang đóng'}</p>
-        <Button className="mt-8 h-14 rounded-2xl px-8 text-lg" variant="outline" onClick={() => sensorApi.setDoor(!store.doorOpen).then(() => store.setDoorState(!store.doorOpen))}>
-          {store.doorOpen ? 'Đóng cửa' : 'Mở cửa'}
+        <p className="mt-2 text-lg text-muted-foreground">
+          {store.doorOpen ? "Cửa đang mở" : "Cửa đang đóng"}
+        </p>
+        <Button
+          className="mt-8 h-14 rounded-2xl px-8 text-lg"
+          variant="outline"
+          onClick={() =>
+            sensorApi
+              .setDoor(!store.doorOpen)
+              .then(() => store.setDoorState(!store.doorOpen))
+          }
+        >
+          {store.doorOpen ? "Đóng cửa" : "Mở cửa"}
         </Button>
       </div>
     </div>
@@ -294,14 +415,32 @@ function FaceIdPanel() {
 }
 
 export default function SmartHomeDashboard() {
+  const [streamUrl, setStreamUrl] = useState("");
   const store = useStore();
   useSensorPolling();
   useAutoLED();
+  useEffect(() => {
+    fetch("http://10.133.233.165:5001/camera-url/esp32cam01")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.stream_url) {
+          const relayUrl = `http://10.133.233.165:5001/esp32/stream?camera_url=${encodeURIComponent(
+            data.stream_url,
+          )}`;
 
-  const [activePage, setActivePage] = useState<PageId>('overview');
+          setStreamUrl(relayUrl);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch stream URL", err);
+      });
+  }, []);
+  const [activePage, setActivePage] = useState<PageId>("overview");
   const [speakerOne, setSpeakerOne] = useState(50);
   const [speakerTwo, setSpeakerTwo] = useState(0);
-  const [lightBusy, setLightBusy] = useState<Partial<Record<'wc' | 'kitchen' | 'bedroom', boolean>>>({});
+  const [lightBusy, setLightBusy] = useState<
+    Partial<Record<"wc" | "kitchen" | "bedroom", boolean>>
+  >({});
 
   const temperature = store.sensors.livingRoom.temperature;
   const humidity = store.sensors.livingRoom.humidity;
@@ -317,29 +456,40 @@ export default function SmartHomeDashboard() {
       wc: wc[index] ?? store.sensors.wc.distance,
       kitchen: kitchen[index] ?? store.sensors.kitchen.distance,
     }));
-  }, [store.stats.wcDistances, store.stats.kitchenDistances, store.sensors.wc.distance, store.sensors.kitchen.distance]);
+  }, [
+    store.stats.wcDistances,
+    store.stats.kitchenDistances,
+    store.sensors.wc.distance,
+    store.sensors.kitchen.distance,
+  ]);
 
   const gasChartData = useMemo(() => {
-    const readings = store.stats.gasReadings.length > 0 ? store.stats.gasReadings : [gas, gas, gas, gas, gas, gas];
+    const readings =
+      store.stats.gasReadings.length > 0
+        ? store.stats.gasReadings
+        : [gas, gas, gas, gas, gas, gas];
     return readings.map((value, index) => ({ name: index + 1, gas: value }));
   }, [store.stats.gasReadings, gas]);
 
-  const toggleLight = async (id: 'wc' | 'kitchen' | 'bedroom', checked: boolean) => {
+  const toggleLight = async (
+    id: "wc" | "kitchen" | "bedroom",
+    checked: boolean,
+  ) => {
     setLightBusy((current) => ({ ...current, [id]: true }));
     store.setLedState(id, checked);
     try {
       await sensorApi.toggleLED(id, checked);
       store.addEvent({
         timestamp: new Date().toISOString(),
-        type: 'led',
+        type: "led",
         value: checked ? 1 : 0,
-        action: `${id} light turned ${checked ? 'ON' : 'OFF'}`,
+        action: `${id} light turned ${checked ? "ON" : "OFF"}`,
       });
     } catch (error) {
       console.error(`Failed to toggle ${id} light`, error);
       store.addEvent({
         timestamp: new Date().toISOString(),
-        type: 'led',
+        type: "led",
         value: checked ? 1 : 0,
         action: `Failed to toggle ${id} light`,
       });
@@ -348,7 +498,7 @@ export default function SmartHomeDashboard() {
     }
   };
 
-  const setAutoMode = async (id: 'wc' | 'kitchen', checked: boolean) => {
+  const setAutoMode = async (id: "wc" | "kitchen", checked: boolean) => {
     store.setAutoLed(id, checked);
     if (!checked) {
       await toggleLight(id, false);
@@ -365,7 +515,9 @@ export default function SmartHomeDashboard() {
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary">
               <Home className="h-7 w-7 text-primary-foreground" />
             </div>
-            <span className="truncate text-3xl font-bold text-sidebar-foreground">SmartHome</span>
+            <span className="truncate text-3xl font-bold text-sidebar-foreground">
+              SmartHome
+            </span>
           </div>
         </div>
 
@@ -377,7 +529,12 @@ export default function SmartHomeDashboard() {
               <button
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
-                className={cn('flex w-full items-center gap-5 rounded-2xl px-5 py-4 text-xl font-semibold transition-colors', isActive ? 'bg-primary text-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')}
+                className={cn(
+                  "flex w-full items-center gap-5 rounded-2xl px-5 py-4 text-xl font-semibold transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                )}
               >
                 <Icon className="h-7 w-7 shrink-0" />
                 <span>{item.label}</span>
@@ -405,23 +562,43 @@ export default function SmartHomeDashboard() {
                 {navItems.slice(0, 4).map((item) => {
                   const Icon = item.icon;
                   return (
-                    <button key={item.id} onClick={() => setActivePage(item.id)} className={cn('rounded-xl p-3', activePage === item.id ? 'bg-primary text-primary-foreground' : 'bg-secondary')}>
+                    <button
+                      key={item.id}
+                      onClick={() => setActivePage(item.id)}
+                      className={cn(
+                        "rounded-xl p-3",
+                        activePage === item.id
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary",
+                      )}
+                    >
                       <Icon className="mx-auto h-5 w-5" />
                     </button>
                   );
                 })}
               </div>
-              <h1 className="break-words text-3xl font-bold text-foreground lg:text-4xl">{titles[activePage]}</h1>
-              <p className="mt-1 text-xl text-muted-foreground">{formatDate()}</p>
+              <h1 className="break-words text-3xl font-bold text-foreground lg:text-4xl">
+                {titles[activePage]}
+              </h1>
+              <p className="mt-1 text-xl text-muted-foreground">
+                {formatDate()}
+              </p>
             </div>
             <div className="flex items-center gap-6">
               <div className="relative hidden lg:block">
                 <Search className="absolute left-5 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground" />
-                <input placeholder="Tìm kiếm..." className="h-14 w-[min(28vw,460px)] rounded-2xl border border-input bg-secondary pl-14 pr-5 text-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+                <input
+                  placeholder="Tìm kiếm..."
+                  className="h-14 w-[min(28vw,460px)] rounded-2xl border border-input bg-secondary pl-14 pr-5 text-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
               </div>
               <button className="relative rounded-2xl p-3 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 <Bell className="h-7 w-7" />
-                {alertCount > 0 && <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-sm font-bold text-destructive-foreground">{alertCount}</span>}
+                {alertCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-sm font-bold text-destructive-foreground">
+                    {alertCount}
+                  </span>
+                )}
               </button>
               <button className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <User className="h-7 w-7" />
@@ -431,96 +608,239 @@ export default function SmartHomeDashboard() {
         </header>
 
         <div className="p-6 lg:p-10">
-          {activePage === 'overview' && (
+          {activePage === "overview" && (
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <StatCard title="Nhiệt độ" value={temperature.toFixed(1)} unit="°C" icon={Thermometer} status={temperature >= 35 ? 'warning' : 'normal'} />
-                <StatCard title="Độ ẩm" value={humidity} unit="%" icon={Droplets} />
-                <StatCard title="Khí Gas 1" value={gas} unit="ppm" icon={Flame} status={sensorStatus(gas, 200, 300)} />
-                <StatCard title="Khí Gas 2" value={gasTwo} unit="ppm" icon={Flame} status={sensorStatus(gasTwo, 200, 300)} />
+                <StatCard
+                  title="Nhiệt độ"
+                  value={temperature.toFixed(1)}
+                  unit="°C"
+                  icon={Thermometer}
+                  status={temperature >= 35 ? "warning" : "normal"}
+                />
+                <StatCard
+                  title="Độ ẩm"
+                  value={humidity}
+                  unit="%"
+                  icon={Droplets}
+                />
+                <StatCard
+                  title="Khí Gas 1"
+                  value={gas}
+                  unit="ppm"
+                  icon={Flame}
+                  status={sensorStatus(gas, 200, 300)}
+                />
+                <StatCard
+                  title="Khí Gas 2"
+                  value={gasTwo}
+                  unit="ppm"
+                  icon={Flame}
+                  status={sensorStatus(gasTwo, 200, 300)}
+                />
               </div>
-              <DoorCameraCard doorOpen={store.doorOpen} />
+              <DoorCameraCard doorOpen={store.doorOpen} streamUrl={streamUrl} />
             </div>
           )}
 
-          {activePage === 'sensors' && (
+          {activePage === "sensors" && (
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <StatCard title="Nhiệt độ ESP32" value={temperature.toFixed(1)} unit="°C" icon={Thermometer} status={temperature >= 35 ? 'warning' : 'normal'} />
-                <StatCard title="Độ ẩm ESP32" value={humidity} unit="%" icon={Droplets} />
-                <StatCard title="WC Sensor" value={store.sensors.wc.distance === -1 ? 'Out' : store.sensors.wc.distance} unit={store.sensors.wc.distance === -1 ? undefined : 'cm'} icon={Gauge} />
-                <StatCard title="Kitchen Sensor" value={store.sensors.kitchen.distance === -1 ? 'Out' : store.sensors.kitchen.distance} unit={store.sensors.kitchen.distance === -1 ? undefined : 'cm'} icon={Gauge} />
+                <StatCard
+                  title="Nhiệt độ ESP32"
+                  value={temperature.toFixed(1)}
+                  unit="°C"
+                  icon={Thermometer}
+                  status={temperature >= 35 ? "warning" : "normal"}
+                />
+                <StatCard
+                  title="Độ ẩm ESP32"
+                  value={humidity}
+                  unit="%"
+                  icon={Droplets}
+                />
+                <StatCard
+                  title="WC Sensor"
+                  value={
+                    store.sensors.wc.distance === -1
+                      ? "Out"
+                      : store.sensors.wc.distance
+                  }
+                  unit={store.sensors.wc.distance === -1 ? undefined : "cm"}
+                  icon={Gauge}
+                />
+                <StatCard
+                  title="Kitchen Sensor"
+                  value={
+                    store.sensors.kitchen.distance === -1
+                      ? "Out"
+                      : store.sensors.kitchen.distance
+                  }
+                  unit={
+                    store.sensors.kitchen.distance === -1 ? undefined : "cm"
+                  }
+                  icon={Gauge}
+                />
               </div>
               <div className="rounded-xl border border-border bg-card p-8">
                 <div className="mb-8 flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold">Khoảng cách cảm biến</h2>
-                    <p className="text-xl text-muted-foreground">Dữ liệu gần nhất</p>
+                    <p className="text-xl text-muted-foreground">
+                      Dữ liệu gần nhất
+                    </p>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={360}>
                   <LineChart data={distanceChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--border)"
+                    />
                     <XAxis dataKey="name" stroke="var(--muted-foreground)" />
                     <YAxis stroke="var(--muted-foreground)" />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--foreground)' }} />
-                    <Line type="monotone" dataKey="wc" stroke="var(--primary)" strokeWidth={3} dot={false} />
-                    <Line type="monotone" dataKey="kitchen" stroke="var(--chart-2)" strokeWidth={3} dot={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        color: "var(--foreground)",
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="wc"
+                      stroke="var(--primary)"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="kitchen"
+                      stroke="var(--chart-2)"
+                      strokeWidth={3}
+                      dot={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {activePage === 'lights' && (
+          {activePage === "lights" && (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <LightCard id="bedroom" name="Đèn phòng ngủ" room="Phòng ngủ chính" enabled={store.leds.bedroom} onToggle={toggleLight} busy={!!lightBusy.bedroom} />
-              <LightCard id="kitchen" name="Đèn phòng bếp" room="Phòng bếp" enabled={store.leds.kitchen} autoMode={store.autoLed.kitchen} threshold={store.ledThresholds.kitchen} onToggle={toggleLight} onAutoChange={(checked) => setAutoMode('kitchen', checked)} onThresholdChange={(value) => store.setLedThreshold('kitchen', value)} busy={!!lightBusy.kitchen} />
-              <LightCard id="wc" name="Đèn phòng vệ sinh" room="Phòng vệ sinh" enabled={store.leds.wc} autoMode={store.autoLed.wc} threshold={store.ledThresholds.wc} onToggle={toggleLight} onAutoChange={(checked) => setAutoMode('wc', checked)} onThresholdChange={(value) => store.setLedThreshold('wc', value)} busy={!!lightBusy.wc} />
+              <LightCard
+                id="bedroom"
+                name="Đèn phòng ngủ"
+                room="Phòng ngủ chính"
+                enabled={store.leds.bedroom}
+                onToggle={toggleLight}
+                busy={!!lightBusy.bedroom}
+              />
+              <LightCard
+                id="kitchen"
+                name="Đèn phòng bếp"
+                room="Phòng bếp"
+                enabled={store.leds.kitchen}
+                autoMode={store.autoLed.kitchen}
+                threshold={store.ledThresholds.kitchen}
+                onToggle={toggleLight}
+                onAutoChange={(checked) => setAutoMode("kitchen", checked)}
+                onThresholdChange={(value) =>
+                  store.setLedThreshold("kitchen", value)
+                }
+                busy={!!lightBusy.kitchen}
+              />
+              <LightCard
+                id="wc"
+                name="Đèn phòng vệ sinh"
+                room="Phòng vệ sinh"
+                enabled={store.leds.wc}
+                autoMode={store.autoLed.wc}
+                threshold={store.ledThresholds.wc}
+                onToggle={toggleLight}
+                onAutoChange={(checked) => setAutoMode("wc", checked)}
+                onThresholdChange={(value) =>
+                  store.setLedThreshold("wc", value)
+                }
+                busy={!!lightBusy.wc}
+              />
             </div>
           )}
 
-          {activePage === 'camera' && (
+          {activePage === "camera" && (
             <div className="space-y-8">
               <DoorCameraCard doorOpen={store.doorOpen} />
               <div className="rounded-xl border border-border bg-card p-8">
                 <h2 className="text-2xl font-bold">Điều khiển cửa</h2>
-                <p className="mt-2 text-lg text-muted-foreground">{store.doorOpen ? 'Cửa đang mở' : 'Cửa đang đóng'}</p>
-                <Button className="mt-8 h-14 rounded-2xl px-8 text-lg" variant="outline" onClick={() => sensorApi.setDoor(!store.doorOpen).then(() => store.setDoorState(!store.doorOpen))}>
-                  {store.doorOpen ? 'Đóng cửa' : 'Mở cửa'}
+                <p className="mt-2 text-lg text-muted-foreground">
+                  {store.doorOpen ? "Cửa đang mở" : "Cửa đang đóng"}
+                </p>
+                <Button
+                  className="mt-8 h-14 rounded-2xl px-8 text-lg"
+                  variant="outline"
+                  onClick={() =>
+                    sensorApi
+                      .setDoor(!store.doorOpen)
+                      .then(() => store.setDoorState(!store.doorOpen))
+                  }
+                >
+                  {store.doorOpen ? "Đóng cửa" : "Mở cửa"}
                 </Button>
               </div>
             </div>
           )}
 
-          {activePage === 'face-id' && <FaceIdPanel />}
+          {activePage === "face-id" && <FaceIdPanel />}
 
-          {activePage === 'speakers' && (
+          {activePage === "speakers" && (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <div className="rounded-xl border border-border bg-card p-7">
                 <h3 className="text-2xl font-bold">Loa phòng khách</h3>
-                <p className="mt-1 text-lg text-muted-foreground">Âm lượng hệ thống</p>
-                <div className="mt-8 flex justify-between text-lg"><span>Âm lượng</span><span>{speakerOne}%</span></div>
-                <Slider className="mt-4" value={[speakerOne]} onValueChange={([value]) => setSpeakerOne(value)} />
+                <p className="mt-1 text-lg text-muted-foreground">
+                  Âm lượng hệ thống
+                </p>
+                <div className="mt-8 flex justify-between text-lg">
+                  <span>Âm lượng</span>
+                  <span>{speakerOne}%</span>
+                </div>
+                <Slider
+                  className="mt-4"
+                  value={[speakerOne]}
+                  onValueChange={([value]) => setSpeakerOne(value)}
+                />
               </div>
               <div className="rounded-xl border border-border bg-card p-7">
                 <h3 className="text-2xl font-bold">Loa cảnh báo</h3>
-                <p className="mt-1 text-lg text-muted-foreground">Dùng cho cảnh báo gas</p>
-                <div className="mt-8 flex justify-between text-lg"><span>Âm lượng</span><span>{speakerTwo}%</span></div>
-                <Slider className="mt-4" value={[speakerTwo]} onValueChange={([value]) => setSpeakerTwo(value)} />
+                <p className="mt-1 text-lg text-muted-foreground">
+                  Dùng cho cảnh báo gas
+                </p>
+                <div className="mt-8 flex justify-between text-lg">
+                  <span>Âm lượng</span>
+                  <span>{speakerTwo}%</span>
+                </div>
+                <Slider
+                  className="mt-4"
+                  value={[speakerTwo]}
+                  onValueChange={([value]) => setSpeakerTwo(value)}
+                />
               </div>
             </div>
           )}
 
-          {activePage === 'alerts' && (
+          {activePage === "alerts" && (
             <div className="space-y-8">
               <div className="rounded-xl border border-border bg-card p-8">
                 <h2 className="text-2xl font-bold">Cài đặt ngưỡng cảnh báo</h2>
                 <div className="mt-8 space-y-6">
                   <div className="flex items-center justify-between rounded-xl border border-border p-6">
                     <div>
-                      <h3 className="text-2xl font-semibold">Cảnh báo khí gas</h3>
-                      <p className="text-lg text-muted-foreground">Phát cảnh báo khi nồng độ gas vượt ngưỡng</p>
+                      <h3 className="text-2xl font-semibold">
+                        Cảnh báo khí gas
+                      </h3>
+                      <p className="text-lg text-muted-foreground">
+                        Phát cảnh báo khi nồng độ gas vượt ngưỡng
+                      </p>
                     </div>
                     <div className="flex items-center gap-6 text-xl text-muted-foreground">
                       <span>Ngưỡng: {store.gasThreshold} ppm</span>
@@ -533,12 +853,23 @@ export default function SmartHomeDashboard() {
                 <h2 className="text-2xl font-bold">Lịch sử cảnh báo</h2>
                 <div className="mt-6 space-y-4">
                   {store.events.length === 0 ? (
-                    <p className="text-muted-foreground">Chưa có sự kiện nào.</p>
+                    <p className="text-muted-foreground">
+                      Chưa có sự kiện nào.
+                    </p>
                   ) : (
                     store.events.slice(0, 6).map((event, index) => (
-                      <div key={`${event.timestamp}-${index}`} className="flex items-center gap-5 rounded-xl border border-warning/30 bg-warning/5 p-4">
-                        <span className="text-muted-foreground">{new Date(event.timestamp).toLocaleTimeString('vi-VN')}</span>
-                        <span className="rounded bg-warning/20 px-3 py-1 text-sm font-semibold text-warning">{event.type}</span>
+                      <div
+                        key={`${event.timestamp}-${index}`}
+                        className="flex items-center gap-5 rounded-xl border border-warning/30 bg-warning/5 p-4"
+                      >
+                        <span className="text-muted-foreground">
+                          {new Date(event.timestamp).toLocaleTimeString(
+                            "vi-VN",
+                          )}
+                        </span>
+                        <span className="rounded bg-warning/20 px-3 py-1 text-sm font-semibold text-warning">
+                          {event.type}
+                        </span>
                         <span className="text-foreground">{event.action}</span>
                       </div>
                     ))
@@ -548,24 +879,41 @@ export default function SmartHomeDashboard() {
             </div>
           )}
 
-          {activePage === 'settings' && (
+          {activePage === "settings" && (
             <div className="space-y-8">
               <div className="rounded-xl border border-border bg-card p-8">
                 <h2 className="text-2xl font-bold">Kết nối MQTT</h2>
                 <div className="mt-8 space-y-6">
-                  <label className="block text-lg text-muted-foreground">MQTT Broker</label>
-                  <input className="h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground" defaultValue="192.168.1.100" />
+                  <label className="block text-lg text-muted-foreground">
+                    MQTT Broker
+                  </label>
+                  <input
+                    className="h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
+                    defaultValue="192.168.1.100"
+                  />
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
-                      <label className="text-lg text-muted-foreground">Port</label>
-                      <input className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground" defaultValue="1883" />
+                      <label className="text-lg text-muted-foreground">
+                        Port
+                      </label>
+                      <input
+                        className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
+                        defaultValue="1883"
+                      />
                     </div>
                     <div>
-                      <label className="text-lg text-muted-foreground">Topic</label>
-                      <input className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground" defaultValue="smarthome/#" />
+                      <label className="text-lg text-muted-foreground">
+                        Topic
+                      </label>
+                      <input
+                        className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
+                        defaultValue="smarthome/#"
+                      />
                     </div>
                   </div>
-                  <Button className="h-14 rounded-2xl px-8 text-lg">Lưu cài đặt</Button>
+                  <Button className="h-14 rounded-2xl px-8 text-lg">
+                    Lưu cài đặt
+                  </Button>
                 </div>
               </div>
               <div className="rounded-xl border border-border bg-card p-8">
@@ -574,15 +922,39 @@ export default function SmartHomeDashboard() {
                   <AreaChart data={gasChartData}>
                     <defs>
                       <linearGradient id="gasFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--warning)" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="var(--warning)" stopOpacity={0.03} />
+                        <stop
+                          offset="5%"
+                          stopColor="var(--warning)"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="var(--warning)"
+                          stopOpacity={0.03}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--border)"
+                    />
                     <XAxis dataKey="name" stroke="var(--muted-foreground)" />
                     <YAxis stroke="var(--muted-foreground)" />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--foreground)' }} />
-                    <Area type="monotone" dataKey="gas" fill="url(#gasFill)" stroke="var(--warning)" strokeWidth={3} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        color: "var(--foreground)",
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="gas"
+                      fill="url(#gasFill)"
+                      stroke="var(--warning)"
+                      strokeWidth={3}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
