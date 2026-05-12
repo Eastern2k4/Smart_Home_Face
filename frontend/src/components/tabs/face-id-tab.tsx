@@ -1,23 +1,23 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
-  Upload,
   CheckCircle2,
-  XCircle,
-  DoorOpen,
   DoorClosed,
+  DoorOpen,
   Loader,
+  Upload,
+  XCircle,
 } from "lucide-react";
 
 import { faceApi } from "@/lib/api/face";
@@ -40,7 +40,6 @@ export function FaceIdTab() {
   const [doorActionLoading, setDoorActionLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // After successful verification, open door
   const onVerificationSuccess = async (name: string) => {
     try {
       await sensorApi.setDoor(true);
@@ -50,7 +49,6 @@ export function FaceIdTab() {
         value: 1,
         action: `Door opened by face recognition (${name})`,
       });
-      // Refresh door state (polling will also update eventually)
       const devices = await sensorApi.getDevices();
       store.setDoorState(devices.doorOpen);
     } catch (err) {
@@ -78,7 +76,6 @@ export function FaceIdTab() {
     }
   };
 
-  // Upload image verification
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -140,23 +137,17 @@ export function FaceIdTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left Column - Face Verification */}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.08fr_0.92fr]">
       <Card className="glass">
         <CardHeader>
-          <CardTitle>Face Verification</CardTitle>
+          <CardTitle className="text-xl">Face Verification</CardTitle>
           <CardDescription>
-            Verify identity using face recognition – door will open
-            automatically on success
+            Verify identity with upload, webcam, or ESP32 capture. The door opens automatically on success.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs
-            value={verificationTab}
-            onValueChange={setVerificationTab}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs value={verificationTab} onValueChange={setVerificationTab} className="w-full">
+            <TabsList className="grid h-auto w-full grid-cols-3 rounded-lg bg-secondary p-1">
               <TabsTrigger value="upload">Upload</TabsTrigger>
               <TabsTrigger value="camera">Camera</TabsTrigger>
               <TabsTrigger value="esp32">ESP32</TabsTrigger>
@@ -164,13 +155,12 @@ export function FaceIdTab() {
 
             <TabsContent value="upload" className="space-y-4">
               <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+                className="mt-4 cursor-pointer rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-10 text-center transition-colors hover:border-primary hover:bg-primary/10"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Click to upload an image
-                </p>
+                <Upload className="mx-auto mb-3 size-10 text-primary" />
+                <p className="text-sm font-medium text-foreground">Click to upload an image</p>
+                <p className="mt-1 text-xs text-muted-foreground">JPG, PNG, or camera photo</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -182,42 +172,34 @@ export function FaceIdTab() {
             </TabsContent>
 
             <TabsContent value="camera" className="space-y-4">
-              <CameraTab
-                onVerify={handleCameraVerification}
-                loading={loading}
-                setLoading={setLoading}
-              />
+              <CameraTab onVerify={handleCameraVerification} loading={loading} setLoading={setLoading} />
             </TabsContent>
 
             <TabsContent value="esp32" className="space-y-4">
-              <ESP32Tab
-                onVerify={handleESP32Verification}
-                loading={loading}
-                setLoading={setLoading}
-              />
+              <ESP32Tab onVerify={handleESP32Verification} loading={loading} setLoading={setLoading} />
             </TabsContent>
           </Tabs>
 
           {result && (
             <div
-              className={`mt-4 p-4 rounded-lg border ${
+              className={`mt-4 rounded-lg border p-4 ${
                 result.verified
-                  ? "bg-accent/10 border-accent"
-                  : "bg-destructive/10 border-destructive"
+                  ? "border-primary/30 bg-primary/10"
+                  : "border-destructive/30 bg-destructive/10"
               }`}
             >
-              <div className="flex gap-3 items-start">
+              <div className="flex items-start gap-3">
                 {result.verified ? (
-                  <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="mt-0.5 size-5 flex-shrink-0 text-primary" />
                 ) : (
-                  <XCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                  <XCircle className="mt-0.5 size-5 flex-shrink-0 text-destructive" />
                 )}
                 <div className="flex-1">
-                  <p className="font-semibold text-sm">{result.message}</p>
+                  <p className="text-sm font-semibold">{result.message}</p>
                   {result.verified && result.name && result.confidence && (
                     <div className="mt-2 space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        Confidence: {result.confidence?.toFixed(1)}%
+                        {result.name} matched with {result.confidence.toFixed(1)}% confidence
                       </p>
                       <Progress value={result.confidence} className="h-1.5" />
                     </div>
@@ -229,25 +211,21 @@ export function FaceIdTab() {
         </CardContent>
       </Card>
 
-      {/* Right Column - Face Database + Door Control */}
       <div className="space-y-6">
         <FaceDatabase />
 
-        {/* Door Control Card */}
         <Card className="glass">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               {store.doorOpen ? (
-                <DoorOpen className="w-5 h-5 text-green-500" />
+                <DoorOpen className="size-5 text-primary" />
               ) : (
-                <DoorClosed className="w-5 h-5 text-muted-foreground" />
+                <DoorClosed className="size-5 text-muted-foreground" />
               )}
               Door Status
             </CardTitle>
             <CardDescription>
-              {store.doorOpen
-                ? "Door is currently OPEN"
-                : "Door is currently CLOSED"}
+              {store.doorOpen ? "Door is currently open" : "Door is currently closed"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -258,13 +236,13 @@ export function FaceIdTab() {
               className="w-full gap-2"
             >
               {doorActionLoading ? (
-                <Loader className="w-4 h-4 animate-spin" />
+                <Loader className="size-4 animate-spin" />
               ) : (
-                <DoorClosed className="w-4 h-4" />
+                <DoorClosed className="size-4" />
               )}
               {store.doorOpen ? "Close Door" : "Door Closed"}
             </Button>
-            <p className="text-xs text-muted-foreground mt-3 text-center">
+            <p className="mt-3 text-center text-xs text-muted-foreground">
               Door opens automatically when a registered face is recognized.
             </p>
           </CardContent>
