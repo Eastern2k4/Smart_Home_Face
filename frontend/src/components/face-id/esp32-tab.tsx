@@ -18,7 +18,7 @@ export const ESP32Tab: React.FC<ESP32TabProps> = ({
   loading,
   setLoading,
 }) => {
-  const [esp32Url, setEsp32Url] = useState("http://172.16.2.105/capture");
+  const [esp32Url, setEsp32Url] = useState("http://172.16.1.197/capture");
   const [esp32Preview, setEsp32Preview] = useState<string | null>(null);
   const [esp32Fetching, setEsp32Fetching] = useState(false);
 
