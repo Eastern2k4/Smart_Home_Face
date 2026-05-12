@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Cpu, Loader, XCircle } from "lucide-react";
+import { Cpu, Loader, Camera } from "lucide-react";
 import { faceApi } from "@/lib/api/face";
 
 interface ESP32TabProps {
@@ -19,57 +19,62 @@ export const ESP32Tab: React.FC<ESP32TabProps> = ({
   setLoading,
 }) => {
   const [esp32Url, setEsp32Url] = useState("http://172.16.1.197/capture");
-  const [esp32Preview, setEsp32Preview] = useState<string | null>(null);
-  const [esp32Fetching, setEsp32Fetching] = useState(false);
+  const [streamActive, setStreamActive] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const streamIframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Cleanup preview on unmount
-  useEffect(() => {
-    return () => {
-      if (esp32Preview) {
-        URL.revokeObjectURL(esp32Preview);
-      }
-    };
-  }, [esp32Preview]);
+  // Derive stream URL from base URL (replace /capture with /stream)
+  const getStreamUrl = () => {
+    const base = esp32Url.replace(/\/capture.*/, "");
+    return `${base}/stream`;
+  };
 
-  // Fetch snapshot from ESP32
-  const fetchEsp32Snapshot = async () => {
+  const startStream = () => {
     if (!esp32Url.trim()) {
-      alert(
-        "Please enter the ESP32 camera address. Example: http://192.168.1.100/capture",
-      );
+      alert("Please enter a valid ESP32 camera address first.");
+      return;
+    }
+    setStreamActive(true);
+  };
+
+  const stopStream = () => {
+    setStreamActive(false);
+  };
+
+  const captureAndVerify = async () => {
+    if (isCapturing || loading) return;
+    if (!esp32Url.trim()) {
+      alert("Please enter a valid ESP32 camera address.");
       return;
     }
 
-    setEsp32Fetching(true);
-    setEsp32Preview(null);
+    setIsCapturing(true);
+    setLoading(true);
 
     try {
       const file = await faceApi.fetchESP32Snapshot(esp32Url);
-      const objectUrl = URL.createObjectURL(file);
-      setEsp32Preview(objectUrl);
       await onVerify(file);
     } catch (error) {
-      console.error("ESP32 snapshot error:", error);
-      // The parent component will handle displaying the error result
-      if (error instanceof Error) {
-        throw error;
-      }
+      console.error("Capture error:", error);
+      // Error is already handled by parent (shows result)
     } finally {
-      setEsp32Fetching(false);
+      setIsCapturing(false);
+      setLoading(false);
     }
   };
 
-  const clearPreview = () => {
-    if (esp32Preview) {
-      URL.revokeObjectURL(esp32Preview);
-      setEsp32Preview(null);
-    }
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // No stream resources to clean up besides the iframe (handled automatically)
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Verify using the ESP32 camera module connected to your system.
+        Connect to your ESP32‑CAM module. The live stream will appear below. Use
+        the button to capture the current frame and verify your face.
       </p>
 
       <div className="space-y-2">
@@ -82,45 +87,59 @@ export const ESP32Tab: React.FC<ESP32TabProps> = ({
           className="glass-sm"
         />
         <p className="text-xs text-muted-foreground">
-          Example: http://192.168.1.100/capture
+          Example: http://192.168.1.100/capture (will automatically use /stream
+          for live view)
         </p>
       </div>
 
-      <Button
-        onClick={fetchEsp32Snapshot}
-        disabled={esp32Fetching || !esp32Url.trim()}
-        className="w-full gap-2"
-      >
-        {esp32Fetching ? (
-          <Loader className="w-4 h-4 animate-spin" />
-        ) : (
+      {!streamActive ? (
+        <Button onClick={startStream} className="w-full gap-2">
           <Cpu className="w-4 h-4" />
-        )}
-        {esp32Fetching ? "Fetching..." : "Fetch ESP32 Snapshot"}
-      </Button>
-
-      {esp32Preview && (
-        <div className="mt-4 space-y-3">
-          <div className="relative rounded-lg overflow-hidden border border-border bg-black/20">
-            <img
-              src={esp32Preview}
-              alt="ESP32 Snapshot"
-              className="w-full h-auto object-contain"
+          Start Live Stream
+        </Button>
+      ) : (
+        <>
+          <div
+            className="relative bg-black rounded-lg overflow-hidden"
+            style={{ minHeight: "300px" }}
+          >
+            <iframe
+              ref={streamIframeRef}
+              src={getStreamUrl()}
+              className="w-full h-full min-h-[300px]"
+              style={{ border: "none" }}
+              allow="autoplay"
+              sandbox="allow-same-origin allow-scripts"
+              title="ESP32 Live Stream"
             />
-            <Button
-              onClick={clearPreview}
-              variant="destructive"
-              size="sm"
-              className="absolute top-2 right-2"
-            >
-              Clear
+            {(isCapturing || loading) && (
+              <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
+                <Loader className="w-5 h-5 animate-spin text-white" />
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm">Live stream active</span>
+            </div>
+            <Button onClick={stopStream} variant="outline" size="sm">
+              Stop Stream
             </Button>
           </div>
-          <p className="text-xs text-center text-muted-foreground">
-            Captured from ESP32 camera - this image will be used for
-            verification
-          </p>
-        </div>
+          <Button
+            onClick={captureAndVerify}
+            disabled={isCapturing || loading}
+            className="w-full gap-2"
+          >
+            {isCapturing || loading ? (
+              <Loader className="w-4 h-4 animate-spin" />
+            ) : (
+              <Camera className="w-4 h-4" />
+            )}
+            Capture & Verify
+          </Button>
+        </>
       )}
     </div>
   );
