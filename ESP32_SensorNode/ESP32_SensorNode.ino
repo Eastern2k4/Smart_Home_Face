@@ -3,6 +3,12 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
 
+#include <HTTPClient.h>
+
+// ================= BACKEND REGISTRATION =================
+const char* backendHost = "192.168.1.X";   // Replace with your Flask server's IP address
+const int backendPort = 5001;
+
 // ================= WIFI CONFIG =================
 const char* ssid = "TRAM 247 STUDY CAFE & WORKSPACE";
 const char* password = "tramloveyou";
@@ -45,6 +51,39 @@ bool wcLightState = false;
 bool kitchenLightState = false;
 bool bedroomLightState = false;
 bool doorOpenState = false;
+
+void registerWithBackend() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected, cannot register");
+        return;
+    }
+
+    HTTPClient http;
+    String url = "http://" + String(backendHost) + ":" + String(backendPort) + "/api/register/sensor";
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+
+    // Create JSON payload with the sensor node's IP
+    String payload = "{\"ip\":\"" + WiFi.localIP().toString() + "\", \"type\":\"sensor\"}";
+    
+    Serial.print("Registering sensor node at: ");
+    Serial.println(url);
+    Serial.print("Payload: ");
+    Serial.println(payload);
+
+    int httpCode = http.POST(payload);
+    
+    if (httpCode > 0) {
+        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_CREATED) {
+            Serial.println("✅ Sensor node registered successfully with backend");
+        } else {
+            Serial.printf("❌ Registration failed, HTTP code: %d\n", httpCode);
+        }
+    } else {
+        Serial.printf("❌ Registration error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+}
 
 // ================= HELPER =================
 void sendCORS() {
@@ -251,6 +290,8 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.print("ESP32 Sensor API: http://");
   Serial.println(WiFi.localIP());
+
+  registerWithBackend();
 
   // Routes
   server.on("/", HTTP_GET, handleRoot);
