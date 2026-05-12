@@ -1,37 +1,64 @@
 // lib/api/sensors.ts
-import { SensorReading, GasSensorReading } from "@/lib/types";
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const API_BASE =
+  process.env.NEXT_PUBLIC_ESP32_SENSOR_URL || "http://172.16.5.233";
+console.log("Using sensor API base URL:", API_BASE);
 
 export const sensorApi = {
-  async getUltrasonic(): Promise<SensorReading> {
-    await delay(300);
+  async getAllSensors() {
+    const res = await fetch(`${API_BASE}/api/sensors`);
+    if (!res.ok) throw new Error("Failed to fetch sensors");
+    return res.json();
+  },
+
+  async getDevices() {
+    const res = await fetch(`${API_BASE}/api/devices`);
+    if (!res.ok) throw new Error("Failed to fetch devices");
+    return res.json();
+  },
+
+  async toggleLED(ledId: "wc" | "kitchen" | "bedroom", state: boolean) {
+    const action = state ? "on" : "off";
+    const res = await fetch(`${API_BASE}/api/light/${ledId}/${action}`, {
+      method: "GET",
+    });
+    if (!res.ok) throw new Error(`Failed to toggle ${ledId} light`);
+    return res.json();
+  },
+
+  async setDoor(open: boolean) {
+    const action = open ? "open" : "close";
+    const res = await fetch(`${API_BASE}/api/door/${action}`, {
+      method: "GET",
+    });
+    if (!res.ok) throw new Error("Failed to control door");
+    return res.json();
+  },
+
+  async getGas(): Promise<number> {
+    const data = await this.getAllSensors();
+    return data.gas ?? 0;
+  },
+
+  async getLEDStatuses(): Promise<Record<string, boolean>> {
+    const res = await fetch(`${API_BASE}/api/devices`);
+    if (!res.ok) throw new Error("Failed to get device states");
+    const data = await res.json();
+    // Map ESP32's keys to frontend expected keys (if needed)
     return {
-      distance: Math.floor(Math.random() * 400) + 5,
-      unit: "cm",
-      timestamp: new Date().toISOString(),
+      wc: data.wcLight ?? false,
+      kitchen: data.kitchenLight ?? false,
+      bedroom: data.bedroomLight ?? false,
     };
   },
 
-  async toggleLED(state: boolean): Promise<{ ledState: boolean }> {
-    await delay(200);
-    return { ledState: state };
-  },
-
-  async getGas(): Promise<GasSensorReading> {
-    await delay(400);
-    const ppm = Math.floor(Math.random() * 500) + 10;
-    let level: GasSensorReading["level"] = "safe";
-    if (ppm > 300) level = "alert";
-    else if (ppm > 150) level = "warning";
-    return { ppm, level, timestamp: new Date().toISOString() };
-  },
-
-  async triggerBuzzer(durationMs = 500): Promise<void> {
-    await delay(durationMs);
+  // Optional
+  async triggerBuzzer(durationMs: number): Promise<void> {
+    console.warn("Buzzer not implemented on ESP32 yet");
+    // await fetch(`${API_BASE}/api/buzzer`, { method: "POST", body: JSON.stringify({ duration: durationMs }) });
   },
 
   async muteBuzzer(): Promise<void> {
-    await delay(100);
+    console.warn("Buzzer not implemented on ESP32 yet");
+    // await fetch(`${API_BASE}/api/buzzer/mute`, { method: "POST" });
   },
 };

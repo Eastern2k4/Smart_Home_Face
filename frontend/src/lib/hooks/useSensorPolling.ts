@@ -1,4 +1,3 @@
-// lib/hooks/useSensorPolling.ts
 import { useEffect, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { sensorApi } from "@/lib/api/sensors";
@@ -6,81 +5,54 @@ import { sensorApi } from "@/lib/api/sensors";
 export function useSensorPolling() {
   const store = useStore();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isPollingRef = useRef(false);
 
   useEffect(() => {
     const poll = async () => {
-      // Fetch distance
-      const distReading = await sensorApi.getUltrasonic();
-      store.setDistance(distReading.distance);
-      store.addDistanceReading(distReading.distance);
+      if (isPollingRef.current) return;
+      isPollingRef.current = true;
+      try {
+        // 1. Fetch all sensor data
+        const sensors = await sensorApi.getAllSensors();
+        store.setSensors(sensors);
 
-      // Auto LED rule
-      if (
-        store.ledAutoMode &&
-        distReading.distance <= store.ledThreshold &&
-        !store.ledStatus
-      ) {
-        await sensorApi.toggleLED(true);
-        store.setLedStatus(true);
-        store.addEvent({
-          timestamp: new Date().toISOString(),
-          type: "led",
-          value: distReading.distance,
-          action: "LED ON by auto rule",
-        });
-      } else if (
-        store.ledAutoMode &&
-        distReading.distance > store.ledThreshold &&
-        store.ledStatus
-      ) {
-        await sensorApi.toggleLED(false);
-        store.setLedStatus(false);
-        store.addEvent({
-          timestamp: new Date().toISOString(),
-          type: "led",
-          value: distReading.distance,
-          action: "LED OFF by auto rule",
-        });
-      }
+        // 2. Fetch device states (LEDs + door)
+        const devices = await sensorApi.getDevices();
+        store.setDoorState(devices.doorOpen);
 
-      // Fetch gas
-      const gasReading = await sensorApi.getGas();
-      store.setGas(gasReading.ppm);
-      store.addGasReading(gasReading.ppm);
+        // 3. Update local store with current LED states (sync)
+        store.setLedState("wc", devices.wcLight ?? false);
+        store.setLedState("kitchen", devices.kitchenLight ?? false);
+        store.setLedState("bedroom", devices.bedroomLight ?? false);
 
-      const isAbove = gasReading.ppm > store.gasThreshold;
-      const isMuted = store.buzzerMuteTime > 0;
+        // 4. Record readings for statistics
+        store.addDistanceReading("wc", sensors.wc.distance);
+        store.addDistanceReading("kitchen", sensors.kitchen.distance);
+        store.addGasReading(sensors.gas);
 
-      if (isAbove && !store.buzzerStatus && !isMuted && store.autoBuzzer) {
-        store.setBuzzerStatus(true);
-        await sensorApi.triggerBuzzer(500);
-        store.addEvent({
-          timestamp: new Date().toISOString(),
-          type: "buzzer",
-          value: gasReading.ppm,
-          action: `Buzzer activated (${gasReading.ppm} ppm)`,
-        });
-      } else if (!isAbove && store.buzzerStatus) {
-        store.setBuzzerStatus(false);
-        store.addEvent({
-          timestamp: new Date().toISOString(),
-          type: "gas",
-          value: gasReading.ppm,
-          action: `Gas back to safe (${gasReading.ppm} ppm)`,
-        });
+        // 5. Gas alert client-side check
+        const alertActive = sensors.gas > store.gasThreshold;
+        store.setGasAlertActive(alertActive);
+        if (alertActive) {
+          store.addEvent({
+            timestamp: new Date().toISOString(),
+            type: "gas",
+            value: sensors.gas,
+            action: `High gas level detected: ${sensors.gas} > ${store.gasThreshold}`,
+          });
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+      } finally {
+        isPollingRef.current = false;
       }
     };
 
     poll();
     intervalRef.current = setInterval(poll, store.pollingInterval * 1000);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [
-    store.pollingInterval,
-    store.ledAutoMode,
-    store.ledThreshold,
-    store.gasThreshold,
-    store.autoBuzzer,
-  ]);
+  }, [store.pollingInterval, store.gasThreshold]); // re-run when thresholds change
 }

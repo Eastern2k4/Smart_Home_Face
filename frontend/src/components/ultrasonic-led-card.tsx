@@ -1,108 +1,79 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Gauge, Zap, Loader } from 'lucide-react';
-import { getUltrasonicReading, toggleLED } from '@/lib/api-mocks';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Activity } from "lucide-react";
 
-export function UltrasonicLedCard() {
-  const [distance, setDistance] = useState<number | null>(null);
-  const [ledState, setLedState] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [toggling, setToggling] = useState(false);
+interface UltrasonicLedCardProps {
+  title: string; // e.g., "WC Light"
+  sensorName: string; // e.g., "WC Sensor"
+  distance: number; // current distance in cm, -1 if out of range
+  autoMode: boolean;
+  onAutoModeChange: (val: boolean) => void;
+  threshold: number;
+  onThresholdChange: (val: number) => void;
+}
 
-  useEffect(() => {
-    const pollSensor = async () => {
-      setLoading(true);
-      try {
-        const reading = await getUltrasonicReading();
-        setDistance(reading.distance);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    pollSensor();
-    const interval = setInterval(pollSensor, 2500);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleToggleLED = async (value: string) => {
-    const newState = value === 'on';
-    setToggling(true);
-    try {
-      await toggleLED(newState);
-      setLedState(newState);
-    } finally {
-      setToggling(false);
-    }
-  };
-
-  const getDistanceStatus = (dist: number) => {
-    if (dist < 50) return { label: 'Very Close', color: 'text-destructive' };
-    if (dist < 150) return { label: 'Close', color: 'text-primary' };
-    if (dist < 300) return { label: 'Medium', color: 'text-secondary' };
-    return { label: 'Far', color: 'text-muted-foreground' };
-  };
-
-  const status = distance !== null ? getDistanceStatus(distance) : null;
-
+export function UltrasonicLedCard({
+  title,
+  sensorName,
+  distance,
+  autoMode,
+  onAutoModeChange,
+  threshold,
+  onThresholdChange,
+}: UltrasonicLedCardProps) {
   return (
-    <Card className="glass">
+    <Card>
       <CardHeader>
-        <CardTitle>Ultrasonic & LED</CardTitle>
-        <CardDescription>Distance sensor and LED control</CardDescription>
+        <CardTitle>
+          <Activity className="inline mr-2" /> {title}
+        </CardTitle>
+        {/* <CardDescription> */}
+        {/*   Current distance:{" "} */}
+        {/*   {distance === -1 ? "Out of range" : `${distance} cm`} */}
+        {/* </CardDescription> */}
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Distance Sensor */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-primary" />
-            <label className="text-sm font-medium">Distance Sensor</label>
-          </div>
-          <div className="glass-sm p-6 text-center">
-            {loading ? (
-              <Loader className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-            ) : distance !== null ? (
-              <>
-                <div className={`text-4xl font-bold ${status?.color}`}>{distance}</div>
-                <div className="text-xs text-muted-foreground mt-1">cm</div>
-                <div className={`text-xs mt-2 ${status?.color}`}>{status?.label}</div>
-              </>
-            ) : (
-              <div className="text-muted-foreground text-sm">No reading</div>
+      <CardContent className="space-y-4">
+        <div className="flex justify-between items-center">
+          <span>Auto Mode</span>
+          <Switch
+            checked={autoMode}
+            onCheckedChange={onAutoModeChange}
+            className="data-[state=checked]:bg-blue-500"
+          />
+        </div>
+
+        {autoMode && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Trigger Distance:</span>
+              <span className="font-bold">{threshold} cm</span>
+            </div>
+            <Slider
+              value={[threshold]}
+              onValueChange={([v]) => onThresholdChange(v)}
+              min={1}
+              max={50}
+              step={1}
+            />
+            <p className="text-xs text-muted-foreground">
+              LED turns ON when distance &lt; {threshold} cm
+            </p>
+            {distance !== -1 && distance < threshold && autoMode && (
+              <div className="text-green-600 text-xs font-medium">
+                Within range – LED should be ON
+              </div>
             )}
           </div>
-        </div>
-
-        {/* LED Control */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className={`w-4 h-4 ${ledState ? 'text-primary' : 'text-muted-foreground'}`} />
-            <label className="text-sm font-medium">LED Control</label>
-          </div>
-          <ToggleGroup
-            type="single"
-            value={ledState ? 'on' : 'off'}
-            onValueChange={handleToggleLED}
-            disabled={toggling}
-            className="w-full"
-          >
-            <ToggleGroupItem value="off" className="flex-1 glass-sm">
-              Off
-            </ToggleGroupItem>
-            <ToggleGroupItem value="on" className="flex-1 glass-sm">
-              On
-            </ToggleGroupItem>
-          </ToggleGroup>
-          {ledState && (
-            <div className="text-xs text-primary text-center mt-2">
-              ● LED is active
-            </div>
-          )}
-        </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,13 +1,30 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Download, Trash2, Gauge, AlertCircle } from 'lucide-react';
-import { useStore } from '@/lib/store';
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import { Download, Trash2, Gauge, AlertCircle } from "lucide-react";
+import { useStore } from "@/lib/store";
 
 export function StreamingAnalysisTab() {
   const store = useStore();
@@ -17,7 +34,9 @@ export function StreamingAnalysisTab() {
   useEffect(() => {
     // Calculate average distance
     if (store.distanceReadings.length > 0) {
-      const avg = store.distanceReadings.reduce((a, b) => a + b, 0) / store.distanceReadings.length;
+      const avg =
+        store.distanceReadings.reduce((a, b) => a + b, 0) /
+        store.distanceReadings.length;
       setAvgDistance(Math.round(avg));
     }
 
@@ -41,22 +60,22 @@ export function StreamingAnalysisTab() {
 
   const handleExportCSV = () => {
     const csv = [
-      ['Timestamp', 'Type', 'Value', 'Action'],
-      ...store.events.map(e => [
+      ["Timestamp", "Type", "Value", "Action"],
+      ...store.events.map((e) => [
         new Date(e.timestamp).toLocaleString(),
         e.type,
         e.value,
         e.action,
       ]),
     ]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
 
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `smart-home-events-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `smart-home-events-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -68,22 +87,34 @@ export function StreamingAnalysisTab() {
         {/* Distance Chart */}
         <Card className="glass">
           <CardHeader>
-            <CardTitle className="text-base">Distance Readings (Last 20)</CardTitle>
+            <CardTitle className="text-base">
+              Distance Readings (Last 20)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {distanceChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={distanceChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(79, 129, 232, 0.1)" />
-                  <XAxis dataKey="name" stroke="rgb(148, 163, 184)" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="rgb(148, 163, 184)" style={{ fontSize: '12px' }} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(79, 129, 232, 0.1)"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="rgb(148, 163, 184)"
+                    style={{ fontSize: "12px" }}
+                  />
+                  <YAxis
+                    stroke="rgb(148, 163, 184)"
+                    style={{ fontSize: "12px" }}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(20, 27, 43, 0.95)',
-                      border: '1px solid rgba(79, 129, 232, 0.3)',
-                      borderRadius: '8px',
+                      backgroundColor: "rgba(20, 27, 43, 0.95)",
+                      border: "1px solid rgba(79, 129, 232, 0.3)",
+                      borderRadius: "8px",
                     }}
-                    labelStyle={{ color: 'rgb(229, 231, 235)' }}
+                    labelStyle={{ color: "rgb(229, 231, 235)" }}
                   />
                   <Line
                     type="monotone"
@@ -113,22 +144,50 @@ export function StreamingAnalysisTab() {
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={gasChartData}>
                   <defs>
-                    <linearGradient id="gasGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="rgb(34, 197, 94)" stopOpacity={0.8} />
-                      <stop offset="50%" stopColor="rgb(243, 156, 18)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="rgb(239, 68, 68)" stopOpacity={0.1} />
+                    <linearGradient
+                      id="gasGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="rgb(34, 197, 94)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="50%"
+                        stopColor="rgb(243, 156, 18)"
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="rgb(239, 68, 68)"
+                        stopOpacity={0.1}
+                      />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(79, 129, 232, 0.1)" />
-                  <XAxis dataKey="name" stroke="rgb(148, 163, 184)" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="rgb(148, 163, 184)" style={{ fontSize: '12px' }} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(79, 129, 232, 0.1)"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="rgb(148, 163, 184)"
+                    style={{ fontSize: "12px" }}
+                  />
+                  <YAxis
+                    stroke="rgb(148, 163, 184)"
+                    style={{ fontSize: "12px" }}
+                  />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(20, 27, 43, 0.95)',
-                      border: '1px solid rgba(79, 129, 232, 0.3)',
-                      borderRadius: '8px',
+                      backgroundColor: "rgba(20, 27, 43, 0.95)",
+                      border: "1px solid rgba(79, 129, 232, 0.3)",
+                      borderRadius: "8px",
                     }}
-                    labelStyle={{ color: 'rgb(229, 231, 235)' }}
+                    labelStyle={{ color: "rgb(229, 231, 235)" }}
                   />
                   <Area
                     type="monotone"
@@ -160,15 +219,21 @@ export function StreamingAnalysisTab() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Average Distance</span>
+              <span className="text-xs text-muted-foreground">
+                Average Distance
+              </span>
               <span className="font-semibold">{avgDistance} cm</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Current Distance</span>
+              <span className="text-xs text-muted-foreground">
+                Current Distance
+              </span>
               <span className="font-semibold">{store.distance} cm</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Readings Recorded</span>
+              <span className="text-xs text-muted-foreground">
+                Readings Recorded
+              </span>
               <Badge>{store.distanceReadings.length}</Badge>
             </div>
           </CardContent>
@@ -183,15 +248,21 @@ export function StreamingAnalysisTab() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Peak Gas Level</span>
+              <span className="text-xs text-muted-foreground">
+                Peak Gas Level
+              </span>
               <span className="font-semibold">{peakGas} ppm</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Current Gas Level</span>
+              <span className="text-xs text-muted-foreground">
+                Current Gas Level
+              </span>
               <span className="font-semibold">{store.gas} ppm</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
-              <span className="text-xs text-muted-foreground">Readings Recorded</span>
+              <span className="text-xs text-muted-foreground">
+                Readings Recorded
+              </span>
               <Badge>{store.gasReadings.length}</Badge>
             </div>
           </CardContent>
@@ -204,7 +275,9 @@ export function StreamingAnalysisTab() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Event Log</CardTitle>
-              <CardDescription>Last {store.events.length} events (max 50)</CardDescription>
+              <CardDescription>
+                Last {store.events.length} events (max 50)
+              </CardDescription>
             </div>
             <div className="flex gap-2">
               <Button
@@ -235,22 +308,36 @@ export function StreamingAnalysisTab() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-card/80 border-b border-border">
                 <tr>
-                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Time</th>
-                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Type</th>
-                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Value</th>
-                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Action</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">
+                    Time
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">
+                    Type
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">
+                    Value
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {store.events.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <td
+                      colSpan={4}
+                      className="text-center py-8 text-muted-foreground"
+                    >
                       No events yet
                     </td>
                   </tr>
                 ) : (
                   store.events.map((event, idx) => (
-                    <tr key={idx} className="hover:bg-card/50 transition-colors">
+                    <tr
+                      key={idx}
+                      className="hover:bg-card/50 transition-colors"
+                    >
                       <td className="py-2 px-3 text-xs text-muted-foreground font-mono">
                         {new Date(event.timestamp).toLocaleTimeString()}
                       </td>
@@ -260,7 +347,9 @@ export function StreamingAnalysisTab() {
                         </Badge>
                       </td>
                       <td className="py-2 px-3 font-semibold">{event.value}</td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">{event.action}</td>
+                      <td className="py-2 px-3 text-xs text-muted-foreground">
+                        {event.action}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -278,8 +367,12 @@ export function StreamingAnalysisTab() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Sensor Poll Interval: {store.pollingInterval.toFixed(1)}s</label>
-              <Badge variant="outline">{store.pollingInterval.toFixed(1)}s</Badge>
+              <label className="text-sm font-medium">
+                Sensor Poll Interval: {store.pollingInterval.toFixed(1)}s
+              </label>
+              <Badge variant="outline">
+                {store.pollingInterval.toFixed(1)}s
+              </Badge>
             </div>
             <Slider
               value={[store.pollingInterval]}

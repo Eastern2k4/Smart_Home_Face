@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -9,32 +9,26 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
   Upload,
-  Cpu,
   CheckCircle2,
   XCircle,
+  DoorOpen,
+  DoorClosed,
   Loader,
-  Plus,
-  Trash2,
-  Users,
 } from "lucide-react";
 
 import { faceApi } from "@/lib/api/face";
+import { sensorApi } from "@/lib/api/sensors";
+import { useStore } from "@/lib/store";
 import { CameraTab } from "@/components/face-id/camera-tab";
-
-// Local type for the face database list (matches what we get from faceApi.getFaces)
-interface FaceInDatabase {
-  id: string;
-  name: string;
-  addedDate: string;
-}
+import { ESP32Tab } from "@/components/face-id/esp32-tab";
+import { FaceDatabase } from "@/components/face-id/face-database";
 
 export function FaceIdTab() {
-  // Verification state
+  const store = useStore();
   const [verificationTab, setVerificationTab] = useState("upload");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -43,43 +37,44 @@ export function FaceIdTab() {
     confidence?: number;
     message: string;
   } | null>(null);
-  const [cameraActive, setCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [doorActionLoading, setDoorActionLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Database state
-  const [faces, setFaces] = useState<FaceInDatabase[]>([]);
-  const [newFaceName, setNewFaceName] = useState("");
-  const [loadingDatabase, setLoadingDatabase] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  // ESP32 state
-  const [esp32Url, setEsp32Url] = useState("");
-
-  // Add face image picker
-  const addFaceFileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedAddFile, setSelectedAddFile] = useState<File | null>(null);
-
-  // Load face list on mount
-  useEffect(() => {
-    loadFaces();
-  }, []);
-
-  // Load faces from backend
-  const loadFaces = async () => {
-    setLoadingDatabase(true);
+  // After successful verification, open door
+  const onVerificationSuccess = async (name: string) => {
     try {
-      const { faces: names } = await faceApi.getFaces();
-      const facesData = names.map((name, idx) => ({
-        id: String(idx + 1),
-        name,
-        addedDate: new Date().toISOString().split("T")[0],
-      }));
-      setFaces(facesData);
+      await sensorApi.setDoor(true);
+      store.addEvent({
+        timestamp: new Date().toISOString(),
+        type: "door",
+        value: 1,
+        action: `Door opened by face recognition (${name})`,
+      });
+      // Refresh door state (polling will also update eventually)
+      const devices = await sensorApi.getDevices();
+      store.setDoorState(devices.doorOpen);
     } catch (err) {
-      console.error("Failed to load faces:", err);
-    } finally {
-      setLoadingDatabase(false);
+      console.error("Failed to open door:", err);
+      store.addEvent({
+        timestamp: new Date().toISOString(),
+        type: "door",
+        value: 0,
+        action: `Failed to open door after face recognition (${name})`,
+      });
+    }
+  };
+
+  const handleVerificationResponse = async (
+    response: Awaited<ReturnType<typeof faceApi.verify>>,
+  ) => {
+    setResult({
+      verified: response.verified,
+      name: response.name,
+      confidence: response.confidence,
+      message: response.message,
+    });
+    if (response.verified && response.name) {
+      await onVerificationSuccess(response.name);
     }
   };
 
@@ -91,12 +86,7 @@ export function FaceIdTab() {
     setResult(null);
     try {
       const response = await faceApi.verify(file);
-      setResult({
-        verified: response.verified,
-        name: response.name,
-        confidence: response.confidence,
-        message: response.message,
-      });
+      await handleVerificationResponse(response);
     } catch (err) {
       setResult({ verified: false, message: "Verification error" });
     } finally {
@@ -104,18 +94,12 @@ export function FaceIdTab() {
     }
   };
 
-  // Add this handler function in FaceIdTab component
   const handleCameraVerification = async (file: File) => {
     setLoading(true);
     setResult(null);
     try {
       const response = await faceApi.verify(file);
-      setResult({
-        verified: response.verified,
-        name: response.name,
-        confidence: response.confidence,
-        message: response.message,
-      });
+      await handleVerificationResponse(response);
     } catch (err) {
       setResult({ verified: false, message: "Verification error" });
     } finally {
@@ -123,73 +107,35 @@ export function FaceIdTab() {
     }
   };
 
-  const verifyViaESP32 = async () => {
-    if (!esp32Url.trim()) {
-      setResult({
-        verified: false,
-        message: "Please enter the ESP32 camera address (e.g., http://192.168.1.100/capture)",
-      });
-      return;
-    }
-
+  const handleESP32Verification = async (file: File) => {
     setLoading(true);
     setResult(null);
-
     try {
-      // Fetch snapshot from ESP32
-      const snapshotFile = await faceApi.fetchESP32Snapshot(esp32Url);
-      // Verify the face
-      const response = await faceApi.verify(snapshotFile);
-      setResult({
-        verified: response.verified,
-        name: response.name,
-        confidence: response.confidence,
-        message: response.message,
-      });
+      const response = await faceApi.verify(file);
+      await handleVerificationResponse(response);
     } catch (err) {
-      setResult({
-        verified: false,
-        message: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
-      });
+      setResult({ verified: false, message: "Verification error" });
     } finally {
       setLoading(false);
     }
   };
 
-  // Add a new face
-  const handleAddFace = async () => {
-    if (!newFaceName.trim()) {
-      alert("Please enter a name");
-      return;
-    }
-    if (!selectedAddFile) {
-      alert("Please select an image for the face");
-      return;
-    }
-
-    setLoadingDatabase(true);
+  const handleCloseDoor = async () => {
+    setDoorActionLoading(true);
     try {
-      await faceApi.addFace(newFaceName, selectedAddFile);
-      setNewFaceName("");
-      setSelectedAddFile(null);
-      if (addFaceFileInputRef.current) addFaceFileInputRef.current.value = "";
-      await loadFaces();
+      await sensorApi.setDoor(false);
+      store.setDoorState(false);
+      store.addEvent({
+        timestamp: new Date().toISOString(),
+        type: "door",
+        value: 0,
+        action: "Door manually closed",
+      });
     } catch (err) {
-      alert("Failed to add face");
+      console.error("Failed to close door:", err);
+      alert("Failed to close door");
     } finally {
-      setLoadingDatabase(false);
-    }
-  };
-
-  const handleDeleteFace = async (name: string) => {
-    setDeleting(name);
-    try {
-      await faceApi.deleteFace(name);
-      await loadFaces();
-    } catch (err) {
-      alert("Delete failed");
-    } finally {
-      setDeleting(null);
+      setDoorActionLoading(false);
     }
   };
 
@@ -200,7 +146,8 @@ export function FaceIdTab() {
         <CardHeader>
           <CardTitle>Face Verification</CardTitle>
           <CardDescription>
-            Verify identity using face recognition
+            Verify identity using face recognition – door will open
+            automatically on success
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -243,30 +190,11 @@ export function FaceIdTab() {
             </TabsContent>
 
             <TabsContent value="esp32" className="space-y-4">
-              <p className="text-sm text-muted-foreground mb-4">
-                Verify using the ESP32 camera module connected to your system.
-              </p>
-              <div className="space-y-3">
-                <Input
-                  type="text"
-                  placeholder="http://192.168.1.100/capture"
-                  value={esp32Url}
-                  onChange={(e) => setEsp32Url(e.target.value)}
-                  disabled={loading}
-                />
-                <Button
-                  onClick={verifyViaESP32}
-                  disabled={loading}
-                  className="w-full gap-2"
-                >
-                  {loading ? (
-                    <Loader className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Cpu className="w-4 h-4" />
-                  )}
-                  Verify via ESP32
-                </Button>
-              </div>
+              <ESP32Tab
+                onVerify={handleESP32Verification}
+                loading={loading}
+                setLoading={setLoading}
+              />
             </TabsContent>
           </Tabs>
 
@@ -301,107 +229,47 @@ export function FaceIdTab() {
         </CardContent>
       </Card>
 
-      {/* Right Column - Face Database */}
-      <Card className="glass">
-        <CardHeader>
-          <CardTitle>Face Database</CardTitle>
-          <CardDescription>
-            Manage registered faces ({faces.length})
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Add face controls */}
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter person's name"
-                value={newFaceName}
-                onChange={(e) => setNewFaceName(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleAddFace()}
-                disabled={loadingDatabase}
-                className="glass-sm"
-              />
-              <Button
-                onClick={handleAddFace}
-                disabled={
-                  loadingDatabase || !newFaceName.trim() || !selectedAddFile
-                }
-                className="gap-2"
-              >
-                {loadingDatabase ? (
-                  <Loader className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                Add
-              </Button>
-            </div>
-            <div className="flex gap-2 items-center">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addFaceFileInputRef.current?.click()}
-                className="flex-1"
-              >
-                {selectedAddFile ? "Change Image" : "Select Image"}
-              </Button>
-              <input
-                ref={addFaceFileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  setSelectedAddFile(file || null);
-                }}
-              />
-              {selectedAddFile && (
-                <span className="text-xs text-muted-foreground truncate flex-1">
-                  {selectedAddFile.name}
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Right Column - Face Database + Door Control */}
+      <div className="space-y-6">
+        <FaceDatabase />
 
-          {/* Face list */}
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {faces.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No faces registered yet</p>
-              </div>
-            ) : (
-              faces.map((face) => (
-                <div
-                  key={face.id}
-                  className="glass-sm p-3 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-medium text-sm">{face.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {face.addedDate}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteFace(face.name)}
-                    disabled={deleting === face.name}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    {deleting === face.name ? (
-                      <Loader className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        {/* Door Control Card */}
+        <Card className="glass">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {store.doorOpen ? (
+                <DoorOpen className="w-5 h-5 text-green-500" />
+              ) : (
+                <DoorClosed className="w-5 h-5 text-muted-foreground" />
+              )}
+              Door Status
+            </CardTitle>
+            <CardDescription>
+              {store.doorOpen
+                ? "Door is currently OPEN"
+                : "Door is currently CLOSED"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={handleCloseDoor}
+              disabled={!store.doorOpen || doorActionLoading}
+              variant={store.doorOpen ? "destructive" : "outline"}
+              className="w-full gap-2"
+            >
+              {doorActionLoading ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <DoorClosed className="w-4 h-4" />
+              )}
+              {store.doorOpen ? "Close Door" : "Door Closed"}
+            </Button>
+            <p className="text-xs text-muted-foreground mt-3 text-center">
+              Door opens automatically when a registered face is recognized.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

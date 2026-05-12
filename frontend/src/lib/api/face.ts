@@ -1,5 +1,5 @@
 // lib/api/face.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
 
 export interface VerificationResult {
   verified: boolean;
@@ -73,7 +73,9 @@ export const faceApi = {
   },
 
   async fetchESP32Snapshot(cameraUrl: string): Promise<File> {
-    const res = await fetch(`${API_BASE}/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`);
+    const res = await fetch(
+      `${API_BASE}/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
+    );
     if (!res.ok) {
       let errorText = res.statusText;
       try {
