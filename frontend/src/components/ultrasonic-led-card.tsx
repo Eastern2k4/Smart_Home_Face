@@ -3,18 +3,18 @@
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Activity } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 
 interface UltrasonicLedCardProps {
-  title: string; // e.g., "WC Light"
-  sensorName: string; // e.g., "WC Sensor"
-  distance: number; // current distance in cm, -1 if out of range
+  title: string;
+  sensorName: string;
+  distance: number;
   autoMode: boolean;
   onAutoModeChange: (val: boolean) => void;
   threshold: number;
@@ -31,30 +31,35 @@ export function UltrasonicLedCard({
   onThresholdChange,
 }: UltrasonicLedCardProps) {
   return (
-    <Card>
+    <Card className="glass">
       <CardHeader>
-        <CardTitle>
-          <Activity className="inline mr-2" /> {title}
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Lightbulb className="size-5 text-accent" />
+          {title}
         </CardTitle>
-        {/* <CardDescription> */}
-        {/*   Current distance:{" "} */}
-        {/*   {distance === -1 ? "Out of range" : `${distance} cm`} */}
-        {/* </CardDescription> */}
+        <CardDescription>
+          {sensorName}: {distance === -1 ? "out of range" : `${distance} cm`}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <span>Auto Mode</span>
+        <div className="flex items-center justify-between rounded-lg bg-secondary p-4">
+          <div>
+            <p className="font-semibold">Auto Mode</p>
+            <p className="text-xs text-muted-foreground">
+              {autoMode ? "Sensor controls the light" : "Manual mode"}
+            </p>
+          </div>
           <Switch
             checked={autoMode}
             onCheckedChange={onAutoModeChange}
-            className="data-[state=checked]:bg-blue-500"
+            className="data-[state=checked]:bg-primary"
           />
         </div>
 
         {autoMode && (
-          <div className="space-y-2">
+          <div className="space-y-3 rounded-lg border border-border bg-card p-4">
             <div className="flex justify-between text-sm">
-              <span>Trigger Distance:</span>
+              <span className="text-muted-foreground">Trigger distance</span>
               <span className="font-bold">{threshold} cm</span>
             </div>
             <Slider
@@ -65,11 +70,11 @@ export function UltrasonicLedCard({
               step={1}
             />
             <p className="text-xs text-muted-foreground">
-              LED turns ON when distance &lt; {threshold} cm
+              LED turns ON when distance is below {threshold} cm.
             </p>
-            {distance !== -1 && distance < threshold && autoMode && (
-              <div className="text-green-600 text-xs font-medium">
-                Within range – LED should be ON
+            {distance !== -1 && distance < threshold && (
+              <div className="rounded-md bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                Within range - LED should be ON
               </div>
             )}
           </div>

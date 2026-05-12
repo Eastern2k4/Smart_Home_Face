@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   title: 'Smart Home IoT Dashboard',
   description: 'Real-time smart home monitoring with face recognition, sensor data, and device control',
   generator: 'v0.app',
-  themeColor: '#0a0d17',
   icons: {
     icon: [
       {
@@ -28,6 +27,10 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#f5f7fb',
 }
 
 export default function RootLayout({

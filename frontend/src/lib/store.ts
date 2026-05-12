@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 export interface SensorEvent {
   timestamp: string;
-  type: "gas" | "led" | "distance";
+  type: "gas" | "led" | "distance" | "door" | "buzzer";
   value: number;
   action: string;
 }
@@ -33,6 +33,7 @@ interface Store {
   ledThresholds: { wc: number; kitchen: number; bedroom: number };
   gasThreshold: number;
   gasAlertActive: boolean;
+  buzzerMuteTime: number;
   pollingInterval: number;
 
   // Logs & stats
@@ -50,6 +51,7 @@ interface Store {
   setAutoLed: (led: keyof LedState, enabled: boolean) => void;
   setLedThreshold: (led: keyof LedState, threshold: number) => void;
   setGasThreshold: (threshold: number) => void;
+  setBuzzerMuteTime: (time: number) => void;
   setPollingInterval: (interval: number) => void;
   addEvent: (event: SensorEvent) => void;
   clearEvents: () => void;
@@ -72,6 +74,7 @@ export const useStore = create<Store>((set, get) => ({
   ledThresholds: { wc: 30, kitchen: 50, bedroom: 30 },
   gasThreshold: 500,
   gasAlertActive: false,
+  buzzerMuteTime: 0,
   pollingInterval: 2.5,
   events: [],
   stats: { wcDistances: [], kitchenDistances: [], gasReadings: [] },
@@ -86,6 +89,7 @@ export const useStore = create<Store>((set, get) => ({
   setLedThreshold: (led, threshold) =>
     set((s) => ({ ledThresholds: { ...s.ledThresholds, [led]: threshold } })),
   setGasThreshold: (threshold) => set({ gasThreshold: threshold }),
+  setBuzzerMuteTime: (time) => set({ buzzerMuteTime: time }),
   setPollingInterval: (interval) => set({ pollingInterval: interval }),
   setGasAlertActive: (active) => set({ gasAlertActive: active }),
   addEvent: (event) =>

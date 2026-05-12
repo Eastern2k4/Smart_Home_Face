@@ -1,4 +1,5 @@
 "use client";
+
 import { useStore } from "@/lib/store";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useAutoLED } from "@/lib/hooks/useAutoLED";
@@ -6,12 +7,12 @@ import { sensorApi } from "@/lib/api/sensors";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Zap, Activity } from "lucide-react";
+import { BedDouble, Ruler, Waves, Zap } from "lucide-react";
 import { UltrasonicLedCard } from "@/components/ultrasonic-led-card";
 
 export function ControlCenterTab() {
@@ -51,34 +52,45 @@ export function ControlCenterTab() {
 
   return (
     <div className="space-y-6">
-      {/* Ultrasonic Sensors Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">WC Sensor</CardTitle>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Card className="glass overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Ruler className="size-5 text-primary" />
+              WC Sensor
+            </CardTitle>
+            <CardDescription>Ultrasonic distance reading</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-center text-3xl font-bold">
-              {wcDistance === -1 ? "Out of range" : `${wcDistance} cm`}
+            <div className="rounded-lg bg-secondary p-5 text-center">
+              <p className="text-sm text-muted-foreground">Current distance</p>
+              <p className="mt-2 text-4xl font-bold tracking-tight">
+                {wcDistance === -1 ? "Out of range" : `${wcDistance} cm`}
+              </p>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Kitchen Sensor</CardTitle>
+
+        <Card className="glass overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Waves className="size-5 text-primary" />
+              Kitchen Sensor
+            </CardTitle>
+            <CardDescription>Ultrasonic distance reading</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-center text-3xl font-bold">
-              {kitchenDistance === -1
-                ? "Out of range"
-                : `${kitchenDistance} cm`}
+            <div className="rounded-lg bg-secondary p-5 text-center">
+              <p className="text-sm text-muted-foreground">Current distance</p>
+              <p className="mt-2 text-4xl font-bold tracking-tight">
+                {kitchenDistance === -1 ? "Out of range" : `${kitchenDistance} cm`}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* LED Controls - using reusable component */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <UltrasonicLedCard
           title="WC Light"
           sensorName="WC Sensor"
@@ -99,67 +111,61 @@ export function ControlCenterTab() {
           onThresholdChange={setKitchenLedThreshold}
         />
 
-        {/* Bedroom Light (Manual only) */}
-        <Card>
+        <Card className="glass">
           <CardHeader>
-            <CardTitle>
-              <Activity className="inline mr-2" /> Bedroom Light
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BedDouble className="size-5 text-primary" />
+              Bedroom Light
             </CardTitle>
-            <CardDescription>Manual control only (no sensor)</CardDescription>
+            <CardDescription>Manual control only</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="font-semibold">LED Control</span>
+            <div className="flex items-center justify-between rounded-lg bg-secondary p-4">
+              <div>
+                <p className="font-semibold">LED Control</p>
+                <p className="text-xs text-muted-foreground">
+                  {bedroomLedStatus ? "Light is on" : "Light is off"}
+                </p>
+              </div>
               <Switch
                 checked={bedroomLedStatus}
                 onCheckedChange={handleBedroomManual}
-                className="data-[state=checked]:bg-purple-500"
+                className="data-[state=checked]:bg-primary"
               />
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
+            <div className="rounded-lg border border-border bg-card p-4 text-center">
               <p className="text-sm text-muted-foreground">
-                This light is manually controlled only
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Use the switch above to turn it ON/OFF
+                Use the switch above to turn the bedroom light on or off.
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Gas Sensor Card (client-side alert only) */}
-      <Card>
+      <Card className="glass">
         <CardHeader>
-          <CardTitle>
-            <Zap className="inline mr-2" /> Gas Sensor
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="size-5 text-accent" />
+            Gas Sensor
           </CardTitle>
-          <CardDescription>Raw ADC value (0–4095)</CardDescription>
+          <CardDescription>Raw ADC value (0-4095)</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center text-4xl font-bold">{gasValue}</div>
-          <div className="mt-2 h-2 rounded-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Current gas level</p>
+              <p className="mt-1 text-4xl font-bold tracking-tight">{gasValue}</p>
+            </div>
+            <div className="rounded-lg bg-secondary px-4 py-3 text-sm">
+              Threshold <span className="font-semibold">{gasThreshold}</span>
+            </div>
+          </div>
+          <div className="mt-5 h-2 rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500" />
           {gasAlertActive && (
-            <div className="bg-red-500/20 text-red-500 p-2 rounded-md mt-2 animate-pulse">
-              ⚠ HIGH GAS LEVEL DETECTED
+            <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+              High gas level detected
             </div>
           )}
-          {/* <div className="mt-4 space-y-2"> */}
-          {/*   <div className="flex justify-between"> */}
-          {/*     <span>Alert Threshold:</span> */}
-          {/*     <span className="font-bold">{gasThreshold}</span> */}
-          {/*   </div> */}
-          {/*   <Slider */}
-          {/*     value={[gasThreshold]} */}
-          {/*     onValueChange={([v]) => store.setGasThreshold(v)} */}
-          {/*     min={100} */}
-          {/*     max={2000} */}
-          {/*     step={50} */}
-          {/*   /> */}
-          {/*   <p className="text-xs text-muted-foreground"> */}
-          {/*     Client‑side alert when gas value exceeds threshold */}
-          {/*   </p> */}
-          {/* </div> */}
         </CardContent>
       </Card>
     </div>

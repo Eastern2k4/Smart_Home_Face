@@ -87,20 +87,19 @@ export function FaceDatabase() {
   return (
     <Card className="glass">
       <CardHeader>
-        <CardTitle>Face Database</CardTitle>
+        <CardTitle className="text-xl">Face Database</CardTitle>
         <CardDescription>
           Manage registered faces ({faces.length})
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Add face controls */}
         <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               placeholder="Enter person's name"
               value={newFaceName}
               onChange={(e) => setNewFaceName(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleAddFace()}
+              onKeyDown={(e) => e.key === "Enter" && handleAddFace()}
               disabled={loadingDatabase}
               className="glass-sm"
             />
@@ -119,13 +118,13 @@ export function FaceDatabase() {
               Add
             </Button>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => addFaceFileInputRef.current?.click()}
-              className="flex-1"
+              className="flex-1 justify-center"
             >
               {selectedAddFile ? "Change Image" : "Select Image"}
             </Button>
@@ -147,18 +146,18 @@ export function FaceDatabase() {
           </div>
         </div>
 
-        {/* Face list */}
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {faces.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No faces registered yet</p>
+            <div className="rounded-lg border border-dashed border-border bg-secondary/50 py-10 text-center text-muted-foreground">
+              <Users className="mx-auto mb-3 size-9 opacity-60" />
+              <p className="text-sm font-medium text-foreground">No faces registered yet</p>
+              <p className="mt-1 text-xs">Add a name and image to create the first profile.</p>
             </div>
           ) : (
             faces.map((face) => (
               <div
                 key={face.id}
-                className="glass-sm p-3 flex items-center justify-between"
+                className="glass-sm flex items-center justify-between p-3"
               >
                 <div>
                   <p className="font-medium text-sm">{face.name}</p>
