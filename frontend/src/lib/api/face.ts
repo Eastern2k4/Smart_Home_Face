@@ -13,7 +13,7 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("image", imageFile);
 
-    const res = await fetch(`${API_BASE}/verify-face`, {
+    const res = await fetch(`${API_BASE}/api/verify-face`, {
       method: "POST",
       body: formData,
     });
@@ -58,7 +58,7 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("image", imageFile);
-    const res = await fetch(`${API_BASE}/add-face`, {
+    const res = await fetch(`${API_BASE}/api/add-face`, {
       method: "POST",
       body: formData,
     });
@@ -67,14 +67,14 @@ export const faceApi = {
   },
 
   async getFaces(): Promise<{ faces: string[] }> {
-    const res = await fetch(`${API_BASE}/get-faces`);
+    const res = await fetch(`${API_BASE}/api/get-faces`);
     if (!res.ok) throw new Error("Failed to load faces");
     return res.json();
   },
 
   async fetchESP32Snapshot(cameraUrl: string): Promise<File> {
     const res = await fetch(
-      `${API_BASE}/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
+      `${API_BASE}/api/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
     );
     if (!res.ok) {
       let errorText = res.statusText;
@@ -91,7 +91,7 @@ export const faceApi = {
   },
 
   async deleteFace(name: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/delete-face`, {
+    const res = await fetch(`${API_BASE}/api/delete-face`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),

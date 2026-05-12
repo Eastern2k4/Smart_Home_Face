@@ -14,9 +14,11 @@ import tempfile
 import os
 
 from flask import Blueprint, request, jsonify, Response
+import requests
 import src.state as state
 
 from src.face_recognition.database import get_all_faces, add_face_image, delete_face
+from src.face_recognition.camera_monitor import get_status as get_camera_status
 from src.face_recognition.verifier import verify_against_database
 from src.esp32.camera_client import CameraClient
 from src.esp32.sensor_client import (
@@ -161,6 +163,29 @@ def esp32_snapshot():
     except Exception as e:
         logger.exception("snapshot failed")
         return jsonify({"error": str(e)}), 500
+
+
+@frontend_bp.route("/esp32/stream", methods=["GET"])
+def esp32_stream():
+    camera_url = request.args.get("camera_url", "").strip()
+    try:
+        stream_url = camera_url or camera_client.stream_url()
+        response = requests.get(stream_url, stream=True, timeout=10)
+        response.raise_for_status()
+        return Response(
+            response.iter_content(chunk_size=1024),
+            content_type=response.headers.get(
+                "Content-Type", "multipart/x-mixed-replace"
+            ),
+        )
+    except Exception as e:
+        logger.exception("stream proxy failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@frontend_bp.route("/camera/recognition-status", methods=["GET"])
+def camera_recognition_status():
+    return jsonify(get_camera_status())
 
 
 # ── door / light / sensors ────────────────────────────────────────────────────

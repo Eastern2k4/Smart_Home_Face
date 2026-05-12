@@ -47,6 +47,18 @@ import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useAutoLED } from "@/lib/hooks/useAutoLED";
 import { cn } from "@/lib/utils";
 
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+
+type RecognitionStatus = {
+  running: boolean;
+  door_allowed: boolean;
+  classification: "idle" | "owner" | "stranger" | "no_face";
+  identity: string | null;
+  image_path: string | null;
+  updated_at: string | null;
+  error: string | null;
+};
+
 type PageId =
   | "overview"
   | "sensors"
@@ -146,10 +158,10 @@ function StatCard({
 
 function DoorCameraCard({
   doorOpen,
-  streamUrl,
+  streamUrl = "",
 }: {
   doorOpen: boolean;
-  streamUrl: string;
+  streamUrl?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -416,25 +428,67 @@ function FaceIdPanel() {
 
 export default function SmartHomeDashboard() {
   const [streamUrl, setStreamUrl] = useState("");
+  const [recognitionStatus, setRecognitionStatus] =
+    useState<RecognitionStatus | null>(null);
+  const [recognitionNotice, setRecognitionNotice] = useState<string | null>(
+    null,
+  );
+  const lastRecognitionRef = useRef<string | null>(null);
   const store = useStore();
   useSensorPolling();
   useAutoLED();
   useEffect(() => {
-    fetch("http://10.133.233.165:5001/camera-url/esp32cam01")
+    fetch(`${API_BASE}/api/arduino/status`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.stream_url) {
-          const relayUrl = `http://10.133.233.165:5001/esp32/stream?camera_url=${encodeURIComponent(
-            data.stream_url,
-          )}`;
-
-          setStreamUrl(relayUrl);
+        if (data.camera_node?.connected) {
+          setStreamUrl(`${API_BASE}/api/esp32/stream`);
         }
       })
       .catch((err) => {
         console.error("Failed to fetch stream URL", err);
       });
   }, []);
+
+  useEffect(() => {
+    const fetchRecognitionStatus = () => {
+      fetch(`${API_BASE}/api/camera/recognition-status`)
+        .then((res) => res.json())
+        .then((data: RecognitionStatus) => {
+          setRecognitionStatus(data);
+          const key = `${data.updated_at}-${data.classification}-${data.identity ?? ""}`;
+          if (
+            data.updated_at &&
+            key !== lastRecognitionRef.current &&
+            data.classification !== "idle"
+          ) {
+            lastRecognitionRef.current = key;
+            if (data.door_allowed) {
+              setRecognitionNotice(
+                `TRUE - Khớp chủ nhà${data.identity ? `: ${data.identity}` : ""}`,
+              );
+            } else if (data.classification === "stranger") {
+              setRecognitionNotice("FALSE - Phát hiện người lạ");
+            } else if (data.classification === "no_face") {
+              setRecognitionNotice("FALSE - Không phát hiện khuôn mặt");
+            }
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch camera recognition status", err);
+        });
+    };
+
+    fetchRecognitionStatus();
+    const interval = window.setInterval(fetchRecognitionStatus, 3000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!recognitionNotice) return;
+    const timer = window.setTimeout(() => setRecognitionNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [recognitionNotice]);
   const [activePage, setActivePage] = useState<PageId>("overview");
   const [speakerOne, setSpeakerOne] = useState(50);
   const [speakerTwo, setSpeakerTwo] = useState(0);
@@ -509,6 +563,18 @@ export default function SmartHomeDashboard() {
 
   return (
     <main className="grid min-h-screen overflow-x-hidden bg-background text-foreground md:grid-cols-[360px_minmax(0,1fr)]">
+      {recognitionNotice && (
+        <div
+          className={cn(
+            "fixed right-6 top-6 z-50 max-w-[min(420px,calc(100vw-3rem))] rounded-xl border px-5 py-4 text-lg font-semibold shadow-lg",
+            recognitionNotice.startsWith("TRUE")
+              ? "border-success/30 bg-success text-white"
+              : "border-destructive/30 bg-destructive text-destructive-foreground",
+          )}
+        >
+          {recognitionNotice}
+        </div>
+      )}
       <aside className="hidden min-h-screen border-r border-sidebar-border bg-sidebar md:flex md:flex-col">
         <div className="grid h-24 grid-cols-[1fr_40px] items-center border-b border-sidebar-border px-6">
           <div className="flex min-w-0 items-center gap-5">
@@ -770,7 +836,58 @@ export default function SmartHomeDashboard() {
 
           {activePage === "camera" && (
             <div className="space-y-8">
-              <DoorCameraCard doorOpen={store.doorOpen} />
+              <DoorCameraCard doorOpen={store.doorOpen} streamUrl={streamUrl} />
+              <div className="rounded-xl border border-border bg-card p-8">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold">Nhận diện camera</h2>
+                    <p className="mt-2 text-lg text-muted-foreground">
+                      {recognitionStatus?.running
+                        ? "Đang tự động chụp và so sánh với dataset"
+                        : "Camera monitor chưa chạy"}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full px-5 py-2 text-lg font-bold",
+                      recognitionStatus?.door_allowed
+                        ? "bg-success/10 text-success"
+                        : "bg-destructive/10 text-destructive",
+                    )}
+                  >
+                    {recognitionStatus?.door_allowed ? "TRUE" : "FALSE"}
+                  </span>
+                </div>
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-xl bg-secondary p-4">
+                    <p className="text-sm text-muted-foreground">Kết quả</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {recognitionStatus?.classification ?? "idle"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-secondary p-4">
+                    <p className="text-sm text-muted-foreground">Chủ nhà</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {recognitionStatus?.identity ?? "Không xác định"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-secondary p-4">
+                    <p className="text-sm text-muted-foreground">Cập nhật</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {recognitionStatus?.updated_at
+                        ? new Date(
+                            recognitionStatus.updated_at,
+                          ).toLocaleTimeString("vi-VN")
+                        : "--"}
+                    </p>
+                  </div>
+                </div>
+                {recognitionStatus?.error && (
+                  <p className="mt-5 rounded-xl bg-destructive/10 p-4 text-destructive">
+                    {recognitionStatus.error}
+                  </p>
+                )}
+              </div>
               <div className="rounded-xl border border-border bg-card p-8">
                 <h2 className="text-2xl font-bold">Điều khiển cửa</h2>
                 <p className="mt-2 text-lg text-muted-foreground">

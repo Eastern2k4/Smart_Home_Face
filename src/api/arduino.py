@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 import src.state as state
+from src.face_recognition.camera_monitor import start_monitor
 
 logger = logging.getLogger("arduino")
 
@@ -84,6 +85,7 @@ def register_camera():
 
     state.camera_node_url = f"http://{ip}"
     state.camera_last_seen = _stamp()
+    monitor_started = start_monitor()
     logger.info("[REGISTER] Camera node registered at %s", state.camera_node_url)
     return (
         jsonify(
@@ -91,6 +93,7 @@ def register_camera():
                 "status": "ok",
                 "url": state.camera_node_url,
                 "registered_at": state.camera_last_seen,
+                "camera_monitor_started": monitor_started,
             }
         ),
         200,

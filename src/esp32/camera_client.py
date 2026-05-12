@@ -20,7 +20,15 @@ class CameraClient:
         base = base_url.rstrip("/")
         candidates = [base]
         if not parsed.path or parsed.path == "/":
-            candidates.extend(["/capture", "/jpg", "/jpeg", "/stream", "/video"])
+            candidates.extend(
+                [
+                    urljoin(base, "/capture"),
+                    urljoin(base, "/jpg"),
+                    urljoin(base, "/jpeg"),
+                    urljoin(base, "/stream"),
+                    urljoin(base, "/video"),
+                ]
+            )
         elif parsed.path.endswith("/capture"):
             root = base[: base.rfind("/capture")]
             candidates.extend([f"{root}/jpg", f"{root}/jpeg", f"{root}/stream"])
@@ -28,6 +36,16 @@ class CameraClient:
             root = base[: base.rfind("/")]
             candidates.extend([f"{root}/capture", f"{root}/stream"])
         return list(dict.fromkeys(candidates))
+
+    def stream_url(self):
+        """Return the ESP32-CAM MJPEG stream URL from the registered base URL."""
+        base = self._get_base_url().rstrip("/")
+        parsed = urlparse(base)
+        if parsed.port:
+            root = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+        else:
+            root = f"{parsed.scheme}://{parsed.hostname}:81"
+        return f"{root}/stream"
 
     def _fetch_image(self, url, timeout=30):
         """Fetch JPEG from a specific URL, handling MJPEG streams."""
@@ -51,7 +69,10 @@ class CameraClient:
                 if image_data.endswith(b"\xff\xd9"):
                     return bytes(image_data)
         if image_data:
-            return bytes(image_data)
+            start = image_data.find(b"\xff\xd8")
+            end = image_data.find(b"\xff\xd9", start + 2) if start != -1 else -1
+            if start != -1 and end != -1:
+                return bytes(image_data[start : end + 2])
         raise Exception("No image data received")
 
     def snapshot(self, camera_url=None):

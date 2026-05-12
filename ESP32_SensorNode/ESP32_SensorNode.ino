@@ -59,7 +59,7 @@ void registerWithBackend() {
     }
 
     HTTPClient http;
-    String url = "http://" + String(backendHost) + ":" + String(backendPort) + "/api/register/sensor";
+    String url = "http://" + String(backendHost) + ":" + String(backendPort) + "/api/arduino/register/sensor";
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 

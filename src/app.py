@@ -3,7 +3,12 @@ app.py  –  Flask application factory with structured logging.
 """
 
 import logging
+import os
 import sys
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask
 from src.api.arduino import arduino_bp
 from src.api.frontend import frontend_bp
