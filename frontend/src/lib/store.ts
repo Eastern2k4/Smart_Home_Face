@@ -43,7 +43,6 @@ interface Store {
     gasReadings: number[];
   };
 
-  updateAllLeds: (leds: LedState) => void;
   // Pure setters (no API calls, no logic)
   setSensors: (data: SensorData) => void;
   setDoorState: (open: boolean) => void;
@@ -80,7 +79,6 @@ export const useStore = create<Store>((set, get) => ({
   // Pure setters
   setSensors: (data) => set({ sensors: data }),
   setDoorState: (open) => set({ doorOpen: open }),
-  updateAllLeds: (leds: LedState) => void;
   setLedState: (led, state) =>
     set((s) => ({ leds: { ...s.leds, [led]: state } })),
   setAutoLed: (led, enabled) =>

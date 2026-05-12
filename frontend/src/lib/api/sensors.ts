@@ -1,5 +1,7 @@
 // lib/api/sensors.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://172.16.5.233";
+const API_BASE =
+  process.env.NEXT_PUBLIC_ESP32_SENSOR_URL || "http://172.16.5.233";
+console.log("Using sensor API base URL:", API_BASE);
 
 export const sensorApi = {
   async getAllSensors() {
