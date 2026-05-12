@@ -127,19 +127,20 @@ export function StreamingAnalysisTab() {
             {distanceChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={distanceChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dbe4ec" />
-                  <XAxis dataKey="name" stroke="#637083" tick={{ fontSize: 12 }} />
-                  <YAxis stroke="#637083" tick={{ fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
+                  <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff",
-                      border: "1px solid #dbe4ec",
+                      backgroundColor: "var(--card)",
+                      border: "1px solid var(--border)",
                       borderRadius: "8px",
-                      boxShadow: "0 12px 30px rgba(23, 32, 51, 0.12)",
+                      color: "var(--foreground)",
                     }}
+                    labelStyle={{ color: "var(--foreground)" }}
                   />
-                  <Line type="monotone" dataKey="wc" name="WC" stroke="#0f9f8f" dot={false} strokeWidth={3} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="kitchen" name="Kitchen" stroke="#2563eb" dot={false} strokeWidth={3} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="wc" name="WC" stroke="var(--primary)" dot={false} strokeWidth={3} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="kitchen" name="Kitchen" stroke="var(--chart-2)" dot={false} strokeWidth={3} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -161,22 +162,23 @@ export function StreamingAnalysisTab() {
                 <AreaChart data={gasChartData}>
                   <defs>
                     <linearGradient id="gasGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.03} />
+                      <stop offset="5%" stopColor="var(--warning)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="var(--warning)" stopOpacity={0.03} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dbe4ec" />
-                  <XAxis dataKey="name" stroke="#637083" tick={{ fontSize: 12 }} />
-                  <YAxis stroke="#637083" tick={{ fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
+                  <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff",
-                      border: "1px solid #dbe4ec",
+                      backgroundColor: "var(--card)",
+                      border: "1px solid var(--border)",
                       borderRadius: "8px",
-                      boxShadow: "0 12px 30px rgba(23, 32, 51, 0.12)",
+                      color: "var(--foreground)",
                     }}
+                    labelStyle={{ color: "var(--foreground)" }}
                   />
-                  <Area type="monotone" dataKey="value" fill="url(#gasGradient)" stroke="#f59e0b" strokeWidth={3} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="value" fill="url(#gasGradient)" stroke="var(--warning)" strokeWidth={3} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (

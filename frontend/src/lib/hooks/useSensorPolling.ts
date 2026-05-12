@@ -13,7 +13,44 @@ export function useSensorPolling() {
       isPollingRef.current = true;
       try {
         // 1. Fetch all sensor data
-        const sensors = await sensorApi.getAllSensors();
+        const rawSensors = await sensorApi.getAllSensors();
+        const sensors = {
+          livingRoom: {
+            temperature:
+              rawSensors.livingRoom?.temperature ??
+              rawSensors.temperature ??
+              rawSensors.temp ??
+              0,
+            humidity:
+              rawSensors.livingRoom?.humidity ??
+              rawSensors.humidity ??
+              rawSensors.hum ??
+              0,
+          },
+          bedroom: {
+            temperature:
+              rawSensors.bedroom?.temperature ??
+              rawSensors.bedroomTemperature ??
+              0,
+            humidity:
+              rawSensors.bedroom?.humidity ??
+              rawSensors.bedroomHumidity ??
+              0,
+          },
+          kitchen: {
+            distance:
+              rawSensors.kitchen?.distance ??
+              rawSensors.kitchenDistance ??
+              0,
+          },
+          wc: {
+            distance:
+              rawSensors.wc?.distance ??
+              rawSensors.wcDistance ??
+              0,
+          },
+          gas: rawSensors.gas ?? rawSensors.gasValue ?? 0,
+        };
         store.setSensors(sensors);
 
         // 2. Fetch device states (LEDs + door)

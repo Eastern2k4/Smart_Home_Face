@@ -18,11 +18,23 @@ export const sensorApi = {
 
   async toggleLED(ledId: "wc" | "kitchen" | "bedroom", state: boolean) {
     const action = state ? "on" : "off";
-    const res = await fetch(`${API_BASE}/api/light/${ledId}/${action}`, {
-      method: "GET",
-    });
-    if (!res.ok) throw new Error(`Failed to toggle ${ledId} light`);
-    return res.json();
+    const aliases =
+      ledId === "bedroom" ? ["bedroom", "bed", "room"] : [ledId];
+
+    let lastError: unknown = null;
+    for (const alias of aliases) {
+      try {
+        const res = await fetch(`${API_BASE}/api/light/${alias}/${action}`, {
+          method: "GET",
+        });
+        if (res.ok) return res.json();
+        lastError = new Error(`HTTP ${res.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error(`Failed to toggle ${ledId} light`);
   },
 
   async setDoor(open: boolean) {
