@@ -1,5 +1,6 @@
 // src/pages/FaceIdPage.tsx
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useStore } from "@/lib/store";
 import { faceApi } from "@/lib/api/face";
 import { sensorApi } from "@/lib/api/sensors";
@@ -9,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 export function FaceIdPage() {
   const store = useStore();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [hostName, setHostName] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [webcamActive, setWebcamActive] = useState(false);
@@ -29,22 +31,27 @@ export function FaceIdPage() {
   }, [webcamStream]);
 
   const addHostFace = async () => {
+    const name = hostName.trim();
+    if (!name) {
+      setMessage("Nhap ten Host truoc khi luu.");
+      return;
+    }
     if (!selectedFile) {
       setMessage("Chon anh khuon mat Host truoc.");
       return;
     }
     setLoading(true);
     try {
-      await faceApi.addHostFace(selectedFile);
+      await faceApi.addHostFace(selectedFile, name);
       store.addEvent({
         timestamp: new Date().toISOString(),
         type: "door",
         value: 1,
-        action: "Added Host face to Face ID dataset",
+        action: `Added Host face '${name}' to Face ID dataset`,
       });
       setSelectedFile(null);
       if (fileRef.current) fileRef.current.value = "";
-      setMessage("Da luu khuon mat Host vao faces/Hosts.");
+      setMessage(`Da luu khuon mat Host '${name}' vao database/Hosts.`);
     } catch {
       setMessage("Khong the luu khuon mat Host. Kiem tra backend Face ID.");
     } finally {
@@ -72,6 +79,12 @@ export function FaceIdPage() {
   };
 
   const captureHostFromWebcam = async () => {
+    const name = hostName.trim();
+    if (!name) {
+      setMessage("Nhap ten Host truoc khi chup.");
+      return;
+    }
+
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) {
       setMessage("Camera chua san sang.");
@@ -90,8 +103,14 @@ export function FaceIdPage() {
       try {
         if (!blob) throw new Error("No image data");
         const file = new File([blob], "host-webcam.jpg", { type: "image/jpeg" });
-        await faceApi.addHostFace(file);
-        setMessage("Da chup va luu Host vao database/Hosts.");
+        await faceApi.addHostFace(file, name);
+        store.addEvent({
+          timestamp: new Date().toISOString(),
+          type: "door",
+          value: 1,
+          action: `Captured Host face '${name}' to Face ID dataset`,
+        });
+        setMessage(`Da chup va luu Host '${name}' vao database/Hosts.`);
       } catch {
         setMessage("Khong the luu anh Host tu camera laptop.");
       } finally {
@@ -108,6 +127,12 @@ export function FaceIdPage() {
           Anh se duoc luu vao dataset faces/Hosts de nhan dien chu nha.
         </p>
         <div className="mt-8 grid gap-4">
+          <Input
+            value={hostName}
+            onChange={(event) => setHostName(event.target.value)}
+            placeholder="Ten Host"
+            className="h-12"
+          />
           {webcamActive && (
             <div className="overflow-hidden rounded-xl bg-black">
               <video
@@ -133,7 +158,7 @@ export function FaceIdPage() {
               type="button"
               className="h-12"
               onClick={captureHostFromWebcam}
-              disabled={!webcamActive || loading}
+              disabled={!webcamActive || loading || !hostName.trim()}
             >
               {loading ? (
                 <Loader className="mr-2 h-5 w-5 animate-spin" />
@@ -164,7 +189,7 @@ export function FaceIdPage() {
           <Button
             className="h-14 rounded-2xl text-lg"
             onClick={addHostFace}
-            disabled={loading || !selectedFile}
+            disabled={loading || !selectedFile || !hostName.trim()}
           >
             {loading ? (
               <Loader className="mr-2 h-5 w-5 animate-spin" />

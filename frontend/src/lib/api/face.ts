@@ -85,9 +85,17 @@ export const faceApi = {
 
   async addHostFace(
     imageFile: File,
-  ): Promise<{ success: boolean; message?: string; identity?: string }> {
+    name: string,
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    identity?: string;
+    name?: string;
+    path?: string;
+  }> {
     const formData = new FormData();
     formData.append("image", imageFile);
+    formData.append("name", name);
     const res = await fetch(`${API_BASE}/api/add-host-face`, {
       method: "POST",
       body: formData,
