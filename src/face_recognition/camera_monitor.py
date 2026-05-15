@@ -119,12 +119,13 @@ def _handle_stranger(image_path):
 
     duration = now - _stranger_started_at
     should_alert = duration >= STRANGER_ALERT_SECONDS
-    saved_path = move_temp_capture_to_stranger(image_path)
+    saved_path = None
 
     if should_alert and (
         _last_stranger_saved_at is None
         or now - _last_stranger_saved_at >= STRANGER_ALERT_SECONDS
     ):
+        saved_path = move_temp_capture_to_stranger(image_path)
         _last_stranger_saved_at = now
         _set_recognition_event(
             "stranger_alert",

@@ -111,14 +111,19 @@ def add_host_face():
     if "image" not in request.files:
         return jsonify({"error": "Missing image"}), 400
     file = request.files["image"]
+    name = request.form.get("name", "").strip()
     if file.filename == "":
         return jsonify({"error": "Empty file"}), 400
-    filepath = add_host_face_image(file)
-    logger.info("Added host face at %s", filepath)
+    if not name:
+        return jsonify({"error": "Missing host name"}), 400
+    filepath = add_host_face_image(file, name=name)
+    logger.info("Added host face '%s' at %s", name, filepath)
     return jsonify(
         {
             "success": True,
             "identity": HOST_IDENTITY,
+            "name": name,
+            "path": filepath,
             "message": "Host face added",
         }
     )

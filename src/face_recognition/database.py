@@ -46,16 +46,29 @@ def add_face_image(name, image_file):
     name_secure = secure_filename(name)
     person_dir = os.path.join(DATABASE_PATH, name_secure)
     os.makedirs(person_dir, exist_ok=True)
-    count = len([f for f in os.listdir(person_dir) if allowed_file(f)])
-    filename = secure_filename(f"{name_secure}_{count}.jpg")
-    filepath = os.path.join(person_dir, filename)
+    filepath = next_image_path(person_dir, name_secure)
     image_file.save(filepath)
     return filepath
 
 
-def add_host_face_image(image_file):
-    """Save uploaded host image to faces/Hosts."""
-    return add_face_image(HOST_IDENTITY, image_file)
+def add_host_face_image(image_file, name=None):
+    """Save uploaded host image directly inside database/Hosts."""
+    ensure_database_dirs()
+    name_secure = secure_filename(name or HOST_IDENTITY) or HOST_IDENTITY
+    filepath = next_image_path(HOSTS_PATH, name_secure)
+    image_file.save(filepath)
+    return filepath
+
+
+def next_image_path(folder_path, prefix):
+    prefix_secure = secure_filename(prefix) or "image"
+    index = 0
+    while True:
+        filename = secure_filename(f"{prefix_secure}_{index}.jpg")
+        filepath = os.path.join(folder_path, filename)
+        if not os.path.exists(filepath):
+            return filepath
+        index += 1
 
 
 def save_bytes_to_folder(folder_path, prefix, image_data):

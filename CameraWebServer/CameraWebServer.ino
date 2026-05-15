@@ -6,9 +6,9 @@
 #include <HTTPClient.h>
 
 // WiFi credentials (must match the extern in config.h)
-const char* WIFI_SSID = "TRAM 247 STUDY CAFE & WORKSPACE";
-const char* WIFI_PASSWORD = "tramloveyou";
-const char* BACKEND_HOST = "172.16.2.254";
+const char* WIFI_SSID = "67676767";
+const char* WIFI_PASSWORD = "67676767";
+const char* BACKEND_HOST = "10.16.136.165";
 const int BACKEND_PORT = 5001;
 
 void setup() {
