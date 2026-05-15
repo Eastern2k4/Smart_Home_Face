@@ -6,8 +6,10 @@
 #include <HTTPClient.h>
 
 // WiFi credentials (must match the extern in config.h)
-const char* WIFI_SSID = "67676767";
-const char* WIFI_PASSWORD = "67676767";
+const char* WIFI_SSID = "TRAM 247 STUDY CAFE & WORKSPACE";
+const char* WIFI_PASSWORD = "tramloveyou";
+const char* BACKEND_HOST = "172.16.2.113";
+const int BACKEND_PORT = 5001;
 
 void setup() {
     Serial.begin(9600);
@@ -35,17 +37,12 @@ void setup() {
     Serial.println("\nWiFi connected");
     Serial.print("Camera ready! Connect to http://");
     String ip = WiFi.localIP().toString();
-
-String streamUrl =
-  "http://" + ip + ":81/stream";
-
-String captureUrl =
-  "http://" + ip + "/capture";
+    Serial.println(ip);
 
 HTTPClient http;
 
 http.begin(
-  "http://10.133.233.165:5001/register-device"
+  "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/camera"
 );
 
 http.addHeader(
@@ -55,9 +52,7 @@ http.addHeader(
 
 String body = "{";
 
-body += "\"device_id\":\"esp32cam01\",";
-body += "\"stream_url\":\"" + streamUrl + "\",";
-body += "\"capture_url\":\"" + captureUrl + "\"";
+body += "\"ip\":\"" + ip + "\"";
 
 body += "}";
 
