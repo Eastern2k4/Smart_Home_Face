@@ -2,14 +2,23 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root
 
-DB_PATH = os.path.join(BASE_DIR, "faces")
-TEMP_PATH = os.path.join(BASE_DIR, "temp")
+DATABASE_PATH = os.path.join(BASE_DIR, "database")
+DB_PATH = DATABASE_PATH
+HOSTS_PATH = os.path.join(DATABASE_PATH, "Hosts")
+STRANGER_PATH = os.path.join(DATABASE_PATH, "Strangers")
+TEMP_PATH = os.path.join(DATABASE_PATH, "Temp")
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 FACE_MODEL = "ArcFace"
 FACE_DETECTOR = "opencv"
+FACE_CONFIDENCE_THRESHOLD = float(os.environ.get("FACE_CONFIDENCE_THRESHOLD", "65"))
+CAMERA_CAPTURE_INTERVAL_SECONDS = float(
+    os.environ.get("CAMERA_CAPTURE_INTERVAL_SECONDS", "5")
+)
+STRANGER_ALERT_SECONDS = float(os.environ.get("STRANGER_ALERT_SECONDS", "300"))
+TEMP_MAX_IMAGES = int(os.environ.get("TEMP_MAX_IMAGES", "100"))
 
 # Environment variables (can be overridden)
 CAMERA_NODE_URL = os.environ.get("CAMERA_NODE_URL", "")

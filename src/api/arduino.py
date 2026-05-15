@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 import src.state as state
+from src.face_recognition.camera_monitor import start_monitor
 
 logger = logging.getLogger("arduino")
 
@@ -28,6 +29,22 @@ def _extract_ip(data: dict | None) -> str | None:
 
 def _stamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _camera_device(ip: str) -> dict:
+    base_url = f"http://{ip}"
+    return {
+        "stream_url": f"{base_url}:81/stream",
+        "capture_url": f"{base_url}/capture",
+    }
+
+
+def _sensor_device(ip: str) -> dict:
+    base_url = f"http://{ip}"
+    return {
+        "sensor_url": f"{base_url}/api/sensors",
+        "door_url": f"{base_url}/api/door",
+    }
 
 
 # ─── registration endpoints ──────────────────────────────────────────────────
@@ -52,10 +69,14 @@ def register_sensor():
 
     state.sensor_node_url = f"http://{ip}"
     state.sensor_last_seen = _stamp()
+    state.connected_devices["sensor"] = _sensor_device(ip)
     logger.info("[REGISTER] Sensor node registered at %s", state.sensor_node_url)
     return (
         jsonify(
             {
+                "success": True,
+                "device_id": "sensor",
+                "device": state.connected_devices["sensor"],
                 "status": "ok",
                 "url": state.sensor_node_url,
                 "registered_at": state.sensor_last_seen,
@@ -83,14 +104,24 @@ def register_camera():
         return jsonify({"error": "Missing or empty 'ip' field"}), 400
 
     state.camera_node_url = f"http://{ip}"
+    state.connected_devices["camera"] = _camera_device(ip)
+    state.camera_stream_url = state.connected_devices["camera"]["stream_url"]
+    state.camera_capture_url = state.connected_devices["camera"]["capture_url"]
     state.camera_last_seen = _stamp()
+    monitor_started = start_monitor()
     logger.info("[REGISTER] Camera node registered at %s", state.camera_node_url)
     return (
         jsonify(
             {
+                "success": True,
+                "device_id": "camera",
+                "device": state.connected_devices["camera"],
                 "status": "ok",
                 "url": state.camera_node_url,
+                "stream_url": state.camera_stream_url,
+                "capture_url": state.camera_capture_url,
                 "registered_at": state.camera_last_seen,
+                "camera_monitor_started": monitor_started,
             }
         ),
         200,
@@ -110,13 +141,19 @@ def status():
         {
             "sensor_node": {
                 "url": state.sensor_node_url,
+                "device": state.connected_devices.get("sensor"),
                 "last_registered": getattr(state, "sensor_last_seen", None),
                 "connected": state.sensor_node_url is not None,
             },
             "camera_node": {
-                "url": state.camera_node_url,
+                "url": state.camera_stream_url or state.camera_node_url,
+                "base_url": state.camera_node_url,
+                "stream_url": state.camera_stream_url,
+                "capture_url": state.camera_capture_url,
+                "device": state.connected_devices.get("camera"),
                 "last_registered": getattr(state, "camera_last_seen", None),
-                "connected": state.camera_node_url is not None,
+                "connected": state.camera_stream_url is not None
+                or state.camera_node_url is not None,
             },
         }
     )

@@ -7,6 +7,7 @@ import sys
 from flask import Flask
 from src.api.arduino import arduino_bp
 from src.api.frontend import frontend_bp
+from src.face_recognition.database import ensure_database_dirs
 
 
 def create_app():
@@ -22,6 +23,7 @@ def create_app():
     )
 
     app = Flask(__name__)
+    ensure_database_dirs()
 
     # ── blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(arduino_bp, url_prefix="/api/arduino")

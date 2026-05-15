@@ -8,12 +8,29 @@ export interface VerificationResult {
   message: string;
 }
 
+export interface RecognitionStatus {
+  running: boolean;
+  door_allowed: boolean;
+  classification: "idle" | "host" | "stranger" | "no_face";
+  identity: string | null;
+  confidence: number | null;
+  image_path: string | null;
+  stranger_duration_seconds: number;
+  stranger_alert: boolean;
+  event_id: number;
+  event_type: "host" | "stranger_alert" | null;
+  event_message: string | null;
+  event_at: string | null;
+  updated_at: string | null;
+  error: string | null;
+}
+
 export const faceApi = {
   async verify(imageFile: File): Promise<VerificationResult> {
     const formData = new FormData();
     formData.append("image", imageFile);
 
-    const res = await fetch(`${API_BASE}/verify-face`, {
+    const res = await fetch(`${API_BASE}/api/verify-face`, {
       method: "POST",
       body: formData,
     });
@@ -58,7 +75,7 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("image", imageFile);
-    const res = await fetch(`${API_BASE}/add-face`, {
+    const res = await fetch(`${API_BASE}/api/add-face`, {
       method: "POST",
       body: formData,
     });
@@ -66,15 +83,28 @@ export const faceApi = {
     return res.json();
   },
 
+  async addHostFace(
+    imageFile: File,
+  ): Promise<{ success: boolean; message?: string; identity?: string }> {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+    const res = await fetch(`${API_BASE}/api/add-host-face`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Add host face failed");
+    return res.json();
+  },
+
   async getFaces(): Promise<{ faces: string[] }> {
-    const res = await fetch(`${API_BASE}/get-faces`);
+    const res = await fetch(`${API_BASE}/api/get-faces`);
     if (!res.ok) throw new Error("Failed to load faces");
     return res.json();
   },
 
   async fetchESP32Snapshot(cameraUrl: string): Promise<File> {
     const res = await fetch(
-      `${API_BASE}/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
+      `${API_BASE}/api/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
     );
     if (!res.ok) {
       let errorText = res.statusText;
@@ -91,12 +121,34 @@ export const faceApi = {
   },
 
   async deleteFace(name: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/delete-face`, {
+    const res = await fetch(`${API_BASE}/api/delete-face`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
     if (!res.ok) throw new Error("Delete failed");
+    return res.json();
+  },
+
+  async getRecognitionStatus(): Promise<RecognitionStatus> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition-status`);
+    if (!res.ok) throw new Error("Failed to load recognition status");
+    return res.json();
+  },
+
+  async startRecognition(): Promise<{ success: boolean; started: boolean }> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition/start`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to start recognition");
+    return res.json();
+  },
+
+  async stopRecognition(): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition/stop`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to stop recognition");
     return res.json();
   },
 };

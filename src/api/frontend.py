@@ -16,8 +16,19 @@ import os
 from flask import Blueprint, request, jsonify, Response
 import src.state as state
 
-from src.face_recognition.database import get_all_faces, add_face_image, delete_face
-from src.face_recognition.verifier import verify_against_database
+from src.face_recognition.database import (
+    HOST_IDENTITY,
+    get_all_faces,
+    add_face_image,
+    add_host_face_image,
+    delete_face,
+)
+from src.face_recognition.camera_monitor import (
+    get_status as get_camera_status,
+    start_monitor,
+    stop_monitor,
+)
+from src.face_recognition.verifier import FaceNotDetected, verify_against_database
 from src.esp32.camera_client import CameraClient
 from src.esp32.sensor_client import (
     SensorNodeClient,
@@ -95,6 +106,24 @@ def add_face():
     return jsonify({"success": True, "message": f"Face '{name}' added"})
 
 
+@frontend_bp.route("/add-host-face", methods=["POST"])
+def add_host_face():
+    if "image" not in request.files:
+        return jsonify({"error": "Missing image"}), 400
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "Empty file"}), 400
+    filepath = add_host_face_image(file)
+    logger.info("Added host face at %s", filepath)
+    return jsonify(
+        {
+            "success": True,
+            "identity": HOST_IDENTITY,
+            "message": "Host face added",
+        }
+    )
+
+
 @frontend_bp.route("/delete-face", methods=["POST"])
 def remove_face():
     data = request.get_json()
@@ -122,7 +151,7 @@ def verify_face():
         tmp_path = tmp.name
 
     try:
-        best_match = verify_against_database(tmp_path)
+        best_match = verify_against_database(tmp_path, allowed_identities={HOST_IDENTITY})
         if not best_match:
             logger.info("verify-face: no match found")
             return jsonify({"match": False})
@@ -135,6 +164,9 @@ def verify_face():
             best_match["identity"], 1 - best_match["distance"]
         )
         return jsonify({"match": True, "best_match": best_match})
+    except FaceNotDetected:
+        logger.info("verify-face: no face detected")
+        return jsonify({"match": False, "classification": "no_face"})
     except Exception as e:
         logger.exception("verify-face failed")
         return jsonify({"error": str(e)}), 500
@@ -164,6 +196,45 @@ def esp32_snapshot():
 
 
 # ── door / light / sensors ────────────────────────────────────────────────────
+
+
+@frontend_bp.route("/esp32/stream", methods=["GET"])
+def esp32_stream():
+    camera_url = request.args.get("camera_url", "").strip()
+    try:
+        stream_url = camera_url or camera_client.stream_url()
+        response = requests.get(stream_url, stream=True, timeout=10)
+        response.raise_for_status()
+        return Response(
+            response.iter_content(chunk_size=1024),
+            content_type=response.headers.get(
+                "Content-Type", "multipart/x-mixed-replace"
+            ),
+        )
+    except ArduinoNotRegistered as e:
+        return jsonify({"error": "arduino_not_registered", "message": str(e)}), 503
+    except ArduinoUnreachable as e:
+        return jsonify({"error": "arduino_unreachable", "message": str(e)}), 502
+    except Exception as e:
+        logger.exception("stream proxy failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@frontend_bp.route("/camera/recognition-status", methods=["GET"])
+def camera_recognition_status():
+    return jsonify(get_camera_status())
+
+
+@frontend_bp.route("/camera/recognition/start", methods=["POST"])
+def camera_recognition_start():
+    started = start_monitor()
+    return jsonify({"success": True, "started": started, "status": get_camera_status()})
+
+
+@frontend_bp.route("/camera/recognition/stop", methods=["POST"])
+def camera_recognition_stop():
+    stop_monitor()
+    return jsonify({"success": True, "status": get_camera_status()})
 
 
 @frontend_bp.route("/control/door/<action>", methods=["POST"])
