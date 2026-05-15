@@ -48,3 +48,5 @@ export function OverviewPage() {
     </div>
   );
 }
+
+export default OverviewPage;

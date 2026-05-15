@@ -1,5 +1,17 @@
 // src/layouts/MainLayout.tsx
-import { Bell, Home, LayoutDashboard, Search, User } from "lucide-react";
+import {
+  Bell,
+  Camera,
+  Home,
+  LayoutDashboard,
+  Lightbulb,
+  Search,
+  Settings,
+  Speaker,
+  Thermometer,
+  User,
+  UserCheck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 
@@ -164,12 +176,3 @@ export function MainLayout({
   );
 }
 
-// Missing imports for icons used in navItems
-import {
-  Thermometer,
-  Lightbulb,
-  Camera,
-  UserCheck,
-  Speaker,
-  Settings,
-} from "lucide-react";

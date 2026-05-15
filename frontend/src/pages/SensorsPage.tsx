@@ -110,3 +110,5 @@ export function SensorsPage() {
     </div>
   );
 }
+
+export default SensorsPage;

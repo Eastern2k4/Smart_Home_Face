@@ -32,3 +32,5 @@ export function CameraPage() {
     </div>
   );
 }
+
+export default CameraPage;

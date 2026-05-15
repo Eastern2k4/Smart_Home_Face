@@ -84,3 +84,5 @@ export function LightsPage() {
     </div>
   );
 }
+
+export default LightsPage;

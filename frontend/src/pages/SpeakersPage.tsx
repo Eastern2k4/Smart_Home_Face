@@ -39,3 +39,5 @@ export function SpeakersPage() {
     </div>
   );
 }
+
+export default SpeakersPage;
