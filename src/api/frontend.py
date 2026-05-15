@@ -23,7 +23,12 @@ from src.face_recognition.database import (
     add_host_face_image,
     delete_face,
 )
-from src.face_recognition.verifier import verify_against_database
+from src.face_recognition.camera_monitor import (
+    get_status as get_camera_status,
+    start_monitor,
+    stop_monitor,
+)
+from src.face_recognition.verifier import FaceNotDetected, verify_against_database
 from src.esp32.camera_client import CameraClient
 from src.esp32.sensor_client import (
     SensorNodeClient,
@@ -146,7 +151,7 @@ def verify_face():
         tmp_path = tmp.name
 
     try:
-        best_match = verify_against_database(tmp_path)
+        best_match = verify_against_database(tmp_path, allowed_identities={HOST_IDENTITY})
         if not best_match:
             logger.info("verify-face: no match found")
             return jsonify({"match": False})
@@ -159,6 +164,9 @@ def verify_face():
             best_match["identity"], 1 - best_match["distance"]
         )
         return jsonify({"match": True, "best_match": best_match})
+    except FaceNotDetected:
+        logger.info("verify-face: no face detected")
+        return jsonify({"match": False, "classification": "no_face"})
     except Exception as e:
         logger.exception("verify-face failed")
         return jsonify({"error": str(e)}), 500
@@ -210,6 +218,23 @@ def esp32_stream():
     except Exception as e:
         logger.exception("stream proxy failed")
         return jsonify({"error": str(e)}), 500
+
+
+@frontend_bp.route("/camera/recognition-status", methods=["GET"])
+def camera_recognition_status():
+    return jsonify(get_camera_status())
+
+
+@frontend_bp.route("/camera/recognition/start", methods=["POST"])
+def camera_recognition_start():
+    started = start_monitor()
+    return jsonify({"success": True, "started": started, "status": get_camera_status()})
+
+
+@frontend_bp.route("/camera/recognition/stop", methods=["POST"])
+def camera_recognition_stop():
+    stop_monitor()
+    return jsonify({"success": True, "status": get_camera_status()})
 
 
 @frontend_bp.route("/control/door/<action>", methods=["POST"])

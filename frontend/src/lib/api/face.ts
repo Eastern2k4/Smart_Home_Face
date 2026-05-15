@@ -8,6 +8,23 @@ export interface VerificationResult {
   message: string;
 }
 
+export interface RecognitionStatus {
+  running: boolean;
+  door_allowed: boolean;
+  classification: "idle" | "host" | "stranger" | "no_face";
+  identity: string | null;
+  confidence: number | null;
+  image_path: string | null;
+  stranger_duration_seconds: number;
+  stranger_alert: boolean;
+  event_id: number;
+  event_type: "host" | "stranger_alert" | null;
+  event_message: string | null;
+  event_at: string | null;
+  updated_at: string | null;
+  error: string | null;
+}
+
 export const faceApi = {
   async verify(imageFile: File): Promise<VerificationResult> {
     const formData = new FormData();
@@ -110,6 +127,28 @@ export const faceApi = {
       body: JSON.stringify({ name }),
     });
     if (!res.ok) throw new Error("Delete failed");
+    return res.json();
+  },
+
+  async getRecognitionStatus(): Promise<RecognitionStatus> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition-status`);
+    if (!res.ok) throw new Error("Failed to load recognition status");
+    return res.json();
+  },
+
+  async startRecognition(): Promise<{ success: boolean; started: boolean }> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition/start`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to start recognition");
+    return res.json();
+  },
+
+  async stopRecognition(): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/api/camera/recognition/stop`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to stop recognition");
     return res.json();
   },
 };
