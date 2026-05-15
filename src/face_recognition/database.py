@@ -3,6 +3,8 @@ import shutil
 from werkzeug.utils import secure_filename
 from src.config import DB_PATH, ALLOWED_EXTENSIONS
 
+HOST_IDENTITY = "Hosts"
+
 
 def get_all_faces():
     """Return list of unique person names."""
@@ -28,6 +30,11 @@ def add_face_image(name, image_file):
     filepath = os.path.join(person_dir, filename)
     image_file.save(filepath)
     return filepath
+
+
+def add_host_face_image(image_file):
+    """Save uploaded host image to faces/Hosts."""
+    return add_face_image(HOST_IDENTITY, image_file)
 
 
 def delete_face(name):

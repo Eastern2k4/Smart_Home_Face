@@ -153,6 +153,83 @@ def register_device():
         }), 500
 
 
+def register_arduino_device(device_type):
+    data = request.get_json(silent=True) or {}
+    ip = (data.get("ip") or "").strip()
+
+    if not ip:
+        return jsonify({
+            "success": False,
+            "error": "Missing device ip"
+        }), 400
+
+    base_url = f"http://{ip}"
+    device_id = data.get("device_id") or device_type
+
+    device = connected_devices.get(device_id, {})
+
+    if device_type == "camera":
+        device.update({
+            "stream_url": f"{base_url}:81/stream",
+            "capture_url": f"{base_url}/capture",
+        })
+    elif device_type == "sensor":
+        device.update({
+            "sensor_url": f"{base_url}/api/sensors",
+            "door_url": f"{base_url}/api/door",
+        })
+
+    connected_devices[device_id] = device
+
+    print(f"\n=== ARDUINO {device_type.upper()} REGISTERED ===")
+    print(connected_devices)
+
+    return jsonify({
+        "success": True,
+        "device_id": device_id,
+        "device": connected_devices[device_id],
+    })
+
+
+def get_registered_camera_stream_url():
+    camera = connected_devices.get("camera")
+    if camera and camera.get("stream_url"):
+        return camera["stream_url"]
+
+    for device in connected_devices.values():
+        if device.get("stream_url"):
+            return device["stream_url"]
+
+    return None
+
+
+@app.route("/api/arduino/register/camera", methods=["POST"])
+def register_arduino_camera():
+    return register_arduino_device("camera")
+
+
+@app.route("/api/arduino/register/sensor", methods=["POST"])
+def register_arduino_sensor():
+    return register_arduino_device("sensor")
+
+
+@app.route("/api/arduino/status", methods=["GET"])
+def arduino_status():
+    camera_stream_url = get_registered_camera_stream_url()
+    sensor = connected_devices.get("sensor")
+
+    return jsonify({
+        "camera_node": {
+            "connected": camera_stream_url is not None,
+            "url": camera_stream_url,
+        },
+        "sensor_node": {
+            "connected": sensor is not None,
+            "url": sensor.get("sensor_url") if sensor else None,
+        },
+    })
+
+
 @app.route("/devices", methods=["GET"])
 def get_devices():
 
@@ -371,6 +448,7 @@ def get_stats():
 
 
 @app.route("/esp32/snapshot", methods=["GET"])
+@app.route("/api/esp32/snapshot", methods=["GET"])
 def esp32_snapshot():
     camera_url = request.args.get("camera_url", "").strip()
     if not camera_url:
@@ -505,9 +583,10 @@ def upload_frame():
             os.remove(temp_path)
 
 @app.route("/esp32/stream")
+@app.route("/api/esp32/stream")
 def esp32_stream():
 
-    camera_url = request.args.get("camera_url")
+    camera_url = request.args.get("camera_url") or get_registered_camera_stream_url()
 
     if not camera_url:
         return "Missing camera_url", 400

@@ -4,7 +4,7 @@ from src.config import DB_PATH, TEMP_PATH, FACE_MODEL, FACE_DETECTOR
 from .database import allowed_file
 
 
-def verify_against_database(image_path):
+def verify_against_database(image_path, allowed_identities=None):
     """
     Compare a temporary image against all faces in DB.
     Returns best match dict or None.
@@ -12,7 +12,12 @@ def verify_against_database(image_path):
     best = None
     min_distance = 1.0
 
+    if not os.path.exists(DB_PATH):
+        return None
+
     for person in os.listdir(DB_PATH):
+        if allowed_identities is not None and person not in allowed_identities:
+            continue
         person_path = os.path.join(DB_PATH, person)
         if not os.path.isdir(person_path):
             continue

@@ -66,6 +66,19 @@ export const faceApi = {
     return res.json();
   },
 
+  async addHostFace(
+    imageFile: File,
+  ): Promise<{ success: boolean; message?: string; identity?: string }> {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+    const res = await fetch(`${API_BASE}/api/add-host-face`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Add host face failed");
+    return res.json();
+  },
+
   async getFaces(): Promise<{ faces: string[] }> {
     const res = await fetch(`${API_BASE}/api/get-faces`);
     if (!res.ok) throw new Error("Failed to load faces");

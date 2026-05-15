@@ -37,7 +37,6 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { useStore } from "@/lib/store";
@@ -321,32 +320,30 @@ function LightCard({
 
 function FaceIdPanel() {
   const store = useStore();
-  const [name, setName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const addFace = async () => {
-    if (!name.trim() || !selectedFile) {
-      setMessage("Nhập tên và chọn ảnh khuôn mặt trước.");
+  const addHostFace = async () => {
+    if (!selectedFile) {
+      setMessage("Chọn ảnh khuôn mặt Host trước.");
       return;
     }
     setLoading(true);
     try {
-      await faceApi.addFace(name.trim(), selectedFile);
+      await faceApi.addHostFace(selectedFile);
       store.addEvent({
         timestamp: new Date().toISOString(),
         type: "door",
         value: 1,
-        action: `Added ${name.trim()} to Face ID dataset`,
+        action: "Added Host face to Face ID dataset",
       });
-      setName("");
       setSelectedFile(null);
       if (fileRef.current) fileRef.current.value = "";
-      setMessage("Đã thêm khuôn mặt vào dataset.");
+      setMessage("Đã lưu khuôn mặt Host vào faces/Hosts.");
     } catch {
-      setMessage("Không thể thêm khuôn mặt. Kiểm tra backend Face ID.");
+      setMessage("Không thể lưu khuôn mặt Host. Kiểm tra backend Face ID.");
     } finally {
       setLoading(false);
     }
@@ -355,17 +352,11 @@ function FaceIdPanel() {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.8fr]">
       <div className="rounded-xl border border-border bg-card p-8">
-        <h2 className="text-2xl font-bold">Thêm Face ID vào dataset</h2>
+        <h2 className="text-2xl font-bold">Thêm Host Face ID</h2>
         <p className="mt-2 text-lg text-muted-foreground">
-          Dùng ảnh khuôn mặt để đăng ký người được phép mở cửa.
+          Ảnh sẽ được lưu vào dataset faces/Hosts để camera cửa ra vào nhận diện.
         </p>
         <div className="mt-8 grid gap-4">
-          <Input
-            className="h-14 rounded-2xl bg-secondary text-lg"
-            placeholder="Tên người dùng"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
           <button
             className="rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-10 text-center transition-colors hover:bg-primary/10"
             onClick={() => fileRef.current?.click()}
@@ -388,15 +379,15 @@ function FaceIdPanel() {
           />
           <Button
             className="h-14 rounded-2xl text-lg"
-            onClick={addFace}
-            disabled={loading}
+            onClick={addHostFace}
+            disabled={loading || !selectedFile}
           >
             {loading ? (
               <Loader className="mr-2 h-5 w-5 animate-spin" />
             ) : (
               <Plus className="mr-2 h-5 w-5" />
             )}
-            Thêm vào dataset
+            Lưu Host vào dataset
           </Button>
           {message && (
             <p className="rounded-xl bg-secondary p-4 text-muted-foreground">

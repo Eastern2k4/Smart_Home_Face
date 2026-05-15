@@ -17,7 +17,13 @@ from flask import Blueprint, request, jsonify, Response
 import requests
 import src.state as state
 
-from src.face_recognition.database import get_all_faces, add_face_image, delete_face
+from src.face_recognition.database import (
+    HOST_IDENTITY,
+    get_all_faces,
+    add_face_image,
+    add_host_face_image,
+    delete_face,
+)
 from src.face_recognition.camera_monitor import get_status as get_camera_status
 from src.face_recognition.verifier import verify_against_database
 from src.esp32.camera_client import CameraClient
@@ -95,6 +101,22 @@ def add_face():
     add_face_image(name, file)
     logger.info("Added face for '%s'", name)
     return jsonify({"success": True, "message": f"Face '{name}' added"})
+
+
+@frontend_bp.route("/add-host-face", methods=["POST"])
+def add_host_face():
+    if "image" not in request.files:
+        return jsonify({"error": "Missing image"}), 400
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "Empty file"}), 400
+    filepath = add_host_face_image(file)
+    logger.info("Added host face at %s", filepath)
+    return jsonify({
+        "success": True,
+        "identity": HOST_IDENTITY,
+        "message": "Host face added",
+    })
 
 
 @frontend_bp.route("/delete-face", methods=["POST"])
@@ -178,6 +200,10 @@ def esp32_stream():
                 "Content-Type", "multipart/x-mixed-replace"
             ),
         )
+    except ArduinoNotRegistered as e:
+        return jsonify({"error": "arduino_not_registered", "message": str(e)}), 503
+    except ArduinoUnreachable as e:
+        return jsonify({"error": "arduino_unreachable", "message": str(e)}), 502
     except Exception as e:
         logger.exception("stream proxy failed")
         return jsonify({"error": str(e)}), 500

@@ -14,6 +14,7 @@ from src.config import (
     TEMP_PATH,
 )
 from src.esp32.camera_client import CameraClient
+from src.face_recognition.database import HOST_IDENTITY
 from src.face_recognition.verifier import verify_against_database
 
 logger = logging.getLogger("camera_monitor")
@@ -118,7 +119,7 @@ def _process_capture(path):
         )
         return
 
-    match = verify_against_database(path)
+    match = verify_against_database(path, allowed_identities={HOST_IDENTITY})
     if match:
         owner_path = _rename_capture(path, "owner", match["identity"])
         _set_status(
