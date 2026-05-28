@@ -1,18 +1,29 @@
 import os
 from deepface import DeepFace
-from src.config import DB_PATH, TEMP_PATH, FACE_MODEL, FACE_DETECTOR
+from src.config import DB_PATH, FACE_MODEL, FACE_DETECTOR
 from .database import allowed_file
 
 
-def verify_against_database(image_path):
+class FaceNotDetected(Exception):
+    """Raised when no face can be detected in a query image."""
+
+
+def verify_against_database(image_path, allowed_identities=None):
     """
     Compare a temporary image against all faces in DB.
     Returns best match dict or None.
     """
+    if not os.path.exists(DB_PATH):
+        return None
+
     best = None
     min_distance = 1.0
 
     for person in os.listdir(DB_PATH):
+        if person.startswith("."):
+            continue
+        if allowed_identities and person not in allowed_identities:
+            continue
         person_path = os.path.join(DB_PATH, person)
         if not os.path.isdir(person_path):
             continue

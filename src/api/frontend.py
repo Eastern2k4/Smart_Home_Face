@@ -13,6 +13,7 @@ import logging
 import tempfile
 import os
 
+import requests
 from flask import Blueprint, request, jsonify, Response
 import src.state as state
 

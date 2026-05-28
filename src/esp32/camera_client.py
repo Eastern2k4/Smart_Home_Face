@@ -66,3 +66,7 @@ class CameraClient:
             except Exception:
                 continue
         raise Exception("Could not fetch snapshot from any candidate endpoint")
+
+    def stream_url(self):
+        """Return the registered ESP32-CAM MJPEG stream endpoint."""
+        return f"{self._get_base_url().rstrip('/')}/stream"

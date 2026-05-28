@@ -1,7 +1,16 @@
 import os
 import shutil
 from werkzeug.utils import secure_filename
-from src.config import DB_PATH, ALLOWED_EXTENSIONS
+from src.config import DB_PATH, ALLOWED_EXTENSIONS, HOST_IDENTITY
+
+__all__ = [
+    "HOST_IDENTITY",
+    "get_all_faces",
+    "add_face_image",
+    "add_host_face_image",
+    "delete_face",
+    "allowed_file",
+]
 
 
 def get_all_faces():
@@ -28,6 +37,11 @@ def add_face_image(name, image_file):
     filepath = os.path.join(person_dir, filename)
     image_file.save(filepath)
     return filepath
+
+
+def add_host_face_image(image_file):
+    """Save an uploaded image to the canonical host folder."""
+    return add_face_image(HOST_IDENTITY, image_file)
 
 
 def delete_face(name):
