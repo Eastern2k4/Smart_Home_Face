@@ -2,12 +2,15 @@
 #include <WebServer.h>
 #include <DHT.h>
 #include <ESP32Servo.h>
+#include <esp_system.h>
 
 #include <HTTPClient.h>
 
 // ================= BACKEND REGISTRATION =================
 const char* backendHost = "192.168.1.X";   // Replace with your Flask server's IP address
 const int backendPort = 5001;
+const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
+unsigned long lastBackendRegisterMs = 0;
 
 // ================= WIFI CONFIG =================
 const char* ssid = "TRAM 247 STUDY CAFE & WORKSPACE";
@@ -41,6 +44,13 @@ WebServer server(80);
 // Servo
 #define SERVO_PIN         26
 
+// Speakers
+#define LOA_TRUOC         27
+#define LOA_KHACH         14
+#define LOA_NGU           13
+#define SPEAKER_ACTIVE_LEVEL   HIGH
+#define SPEAKER_INACTIVE_LEVEL LOW
+
 // ================= OBJECTS =================
 DHT dhtLiving(DHT_LIVING_PIN, DHT_TYPE);
 DHT dhtBedroom(DHT_BEDROOM_PIN, DHT_TYPE);
@@ -51,6 +61,22 @@ bool wcLightState = false;
 bool kitchenLightState = false;
 bool bedroomLightState = false;
 bool doorOpenState = false;
+bool doorServoAttached = false;
+bool indoorAlarmActive = false;
+bool indoorAlarmEnabled = true;
+bool gasAlarmActive = false;
+bool temperatureAlarmActive = false;
+bool humidityAlarmActive = false;
+int gasAlarmThreshold = 500;
+float temperatureAlarmThreshold = 35.0;
+float humidityAlarmThreshold = 80.0;
+const int GAS_ALARM_HYSTERESIS = 50;
+const float TEMPERATURE_ALARM_HYSTERESIS = 1.0;
+const float HUMIDITY_ALARM_HYSTERESIS = 3.0;
+unsigned long lastAlarmCheckMs = 0;
+const unsigned long ALARM_CHECK_INTERVAL_MS = 2500;
+unsigned long frontDoorSpeakerAlertUntilMs = 0;
+const unsigned long SPEAKER_ALERT_DURATION_MS = 5000;
 
 void registerWithBackend() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -83,9 +109,16 @@ void registerWithBackend() {
         Serial.printf("❌ Registration error: %s\n", http.errorToString(httpCode).c_str());
     }
     http.end();
+    lastBackendRegisterMs = millis();
 }
 
 // ================= HELPER =================
+void printResetReason() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  Serial.print("ESP32 reset reason: ");
+  Serial.println(static_cast<int>(reason));
+}
+
 void sendCORS() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -108,6 +141,75 @@ long readUltrasonicDistance(int trigPin, int echoPin) {
 
   long distance = duration * 0.034 / 2;
   return distance;
+}
+
+String jsonFloat(float value) {
+  return isnan(value) ? "null" : String(value);
+}
+
+void setIndoorSpeakers(bool on) {
+  indoorAlarmActive = on;
+  digitalWrite(LOA_KHACH, on ? SPEAKER_ACTIVE_LEVEL : SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(LOA_NGU, on ? SPEAKER_ACTIVE_LEVEL : SPEAKER_INACTIVE_LEVEL);
+}
+
+void setFrontDoorSpeaker(bool on) {
+  digitalWrite(LOA_TRUOC, on ? SPEAKER_ACTIVE_LEVEL : SPEAKER_INACTIVE_LEVEL);
+}
+
+void forceAllSpeakersOff() {
+  pinMode(LOA_TRUOC, OUTPUT);
+  pinMode(LOA_KHACH, OUTPUT);
+  pinMode(LOA_NGU, OUTPUT);
+  frontDoorSpeakerAlertUntilMs = 0;
+  indoorAlarmActive = false;
+  digitalWrite(LOA_TRUOC, SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(LOA_KHACH, SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(LOA_NGU, SPEAKER_INACTIVE_LEVEL);
+}
+
+void updateIndoorAlarm() {
+  int gasValue = analogRead(GAS_PIN);
+  float livingTemp = dhtLiving.readTemperature();
+  float livingHum = dhtLiving.readHumidity();
+  float bedroomTemp = dhtBedroom.readTemperature();
+  float bedroomHum = dhtBedroom.readHumidity();
+
+  gasAlarmActive = gasAlarmActive
+    ? gasValue >= gasAlarmThreshold - GAS_ALARM_HYSTERESIS
+    : gasValue > gasAlarmThreshold;
+  temperatureAlarmActive = temperatureAlarmActive
+    ? (!isnan(livingTemp) && livingTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS) ||
+      (!isnan(bedroomTemp) && bedroomTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS)
+    : (!isnan(livingTemp) && livingTemp > temperatureAlarmThreshold) ||
+      (!isnan(bedroomTemp) && bedroomTemp > temperatureAlarmThreshold);
+  humidityAlarmActive = humidityAlarmActive
+    ? (!isnan(livingHum) && livingHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS) ||
+      (!isnan(bedroomHum) && bedroomHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS)
+    : (!isnan(livingHum) && livingHum > humidityAlarmThreshold) ||
+      (!isnan(bedroomHum) && bedroomHum > humidityAlarmThreshold);
+
+  setIndoorSpeakers(
+    indoorAlarmEnabled &&
+    (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive)
+  );
+
+  bool frontDoorSpeakerAlertActive =
+    frontDoorSpeakerAlertUntilMs != 0 && millis() < frontDoorSpeakerAlertUntilMs;
+  setFrontDoorSpeaker(frontDoorSpeakerAlertActive);
+}
+
+void ensureDoorServoAttached() {
+  if (doorServoAttached) {
+    return;
+  }
+
+  ESP32PWM::allocateTimer(0);
+  doorServo.setPeriodHertz(50);
+  doorServo.attach(SERVO_PIN, 500, 2400);
+  doorServo.write(doorOpenState ? 180 : 90);
+  doorServoAttached = true;
+  delay(200);
 }
 
 // ================= API HANDLERS =================
@@ -136,13 +238,13 @@ void handleSensors() {
   String json = "{";
 
   json += "\"livingRoom\":{";
-  json += "\"temperature\":" + String(livingTemp) + ",";
-  json += "\"humidity\":" + String(livingHum);
+  json += "\"temperature\":" + jsonFloat(livingTemp) + ",";
+  json += "\"humidity\":" + jsonFloat(livingHum);
   json += "},";
 
   json += "\"bedroom\":{";
-  json += "\"temperature\":" + String(bedroomTemp) + ",";
-  json += "\"humidity\":" + String(bedroomHum);
+  json += "\"temperature\":" + jsonFloat(bedroomTemp) + ",";
+  json += "\"humidity\":" + jsonFloat(bedroomHum);
   json += "},";
 
   json += "\"kitchen\":{";
@@ -169,7 +271,15 @@ void handleDevices() {
   json += "\"wcLight\":" + String(wcLightState ? "true" : "false") + ",";
   json += "\"kitchenLight\":" + String(kitchenLightState ? "true" : "false") + ",";
   json += "\"bedroomLight\":" + String(bedroomLightState ? "true" : "false") + ",";
-  json += "\"doorOpen\":" + String(doorOpenState ? "true" : "false");
+  json += "\"doorOpen\":" + String(doorOpenState ? "true" : "false") + ",";
+  json += "\"livingRoomSpeaker\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"bedroomSpeaker\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"alarmTriggers\":{";
+  json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
+  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
+  json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
+  json += "}";
   json += "}";
 
   server.send(200, "application/json", json);
@@ -222,6 +332,7 @@ void handleBedroomLightOff() {
 
 void handleDoorOpen() {
   sendCORS();
+  ensureDoorServoAttached();
 
   // quay từ 90 -> 180 chậm
   for (int pos = 90; pos <= 180; pos++) {
@@ -235,6 +346,7 @@ void handleDoorOpen() {
 
 void handleDoorClose() {
   sendCORS();
+  ensureDoorServoAttached();
 
   // quay từ 180 -> 90 doorServo.write(90); 
   for (int pos = 180; pos >= 90; pos--) {
@@ -246,9 +358,64 @@ void handleDoorClose() {
   server.send(200, "application/json", "{\"success\":true,\"doorOpen\":false}");
 }
 
+void handleSpeakerSettings() {
+  sendCORS();
+
+  String json = "{";
+  json += "\"enabled\":" + String(indoorAlarmEnabled ? "true" : "false") + ",";
+  json += "\"gasThreshold\":" + String(gasAlarmThreshold) + ",";
+  json += "\"temperatureThreshold\":" + String(temperatureAlarmThreshold) + ",";
+  json += "\"humidityThreshold\":" + String(humidityAlarmThreshold) + ",";
+  json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"alarmTriggers\":{";
+  json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
+  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
+  json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
+  json += "}";
+  json += "}";
+
+  server.send(200, "application/json", json);
+}
+
+void handleSpeakerSettingsUpdate() {
+  sendCORS();
+
+  if (!server.hasArg("enabled") || !server.hasArg("gas") ||
+      !server.hasArg("temperature") || !server.hasArg("humidity")) {
+    server.send(400, "application/json", "{\"error\":\"Missing speaker settings\"}");
+    return;
+  }
+
+  int newGasThreshold = server.arg("gas").toInt();
+  float newTemperatureThreshold = server.arg("temperature").toFloat();
+  float newHumidityThreshold = server.arg("humidity").toFloat();
+
+  if (newGasThreshold < 0 || newTemperatureThreshold <= 0 || newHumidityThreshold <= 0) {
+    server.send(400, "application/json", "{\"error\":\"Invalid speaker thresholds\"}");
+    return;
+  }
+
+  indoorAlarmEnabled = server.arg("enabled") == "true";
+  gasAlarmThreshold = newGasThreshold;
+  temperatureAlarmThreshold = newTemperatureThreshold;
+  humidityAlarmThreshold = newHumidityThreshold;
+  updateIndoorAlarm();
+  handleSpeakerSettings();
+}
+
+void handleSpeakerAlert() {
+  sendCORS();
+  frontDoorSpeakerAlertUntilMs = millis() + SPEAKER_ALERT_DURATION_MS;
+  updateIndoorAlarm();
+  server.send(200, "application/json", "{\"success\":true,\"frontDoorSpeakerAlert\":true}");
+}
+
 // ================= SETUP =================
 void setup() {
   Serial.begin(115200);
+  delay(100);
+  printResetReason();
+  forceAllSpeakersOff();
 
   // DHT
   dhtLiving.begin();
@@ -273,9 +440,8 @@ void setup() {
   // Gas
   pinMode(GAS_PIN, INPUT);
 
-  // Servo
-  doorServo.attach(SERVO_PIN);
-  doorServo.write(90);
+  // Speakers stay off after upload/reset until an alarm is triggered.
+  forceAllSpeakersOff();
 
   // WiFi
   WiFi.begin(ssid, password);
@@ -311,6 +477,10 @@ void setup() {
   server.on("/api/door/open", HTTP_GET, handleDoorOpen);
   server.on("/api/door/close", HTTP_GET, handleDoorClose);
 
+  server.on("/api/speaker/settings", HTTP_GET, handleSpeakerSettings);
+  server.on("/api/speaker/settings/update", HTTP_GET, handleSpeakerSettingsUpdate);
+  server.on("/api/speaker/alert", HTTP_GET, handleSpeakerAlert);
+
   server.begin();
   Serial.println("HTTP server started");
 }
@@ -318,4 +488,15 @@ void setup() {
 // ================= LOOP =================
 void loop() {
   server.handleClient();
+
+  if (WiFi.status() == WL_CONNECTED &&
+      millis() - lastBackendRegisterMs >= BACKEND_REGISTER_INTERVAL_MS) {
+    registerWithBackend();
+  }
+
+  unsigned long now = millis();
+  if (now - lastAlarmCheckMs >= ALARM_CHECK_INTERVAL_MS) {
+    lastAlarmCheckMs = now;
+    updateIndoorAlarm();
+  }
 }

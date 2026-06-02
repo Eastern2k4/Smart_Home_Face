@@ -5,11 +5,12 @@ app.py  –  Flask application factory with structured logging.
 import logging
 import sys
 from flask import Flask
-from src.api.arduino import arduino_bp
+from src.api.arduino import create_arduino_blueprint
 from src.api.camera import create_camera_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.face import create_face_blueprint
 from src.dependencies.services import create_service_container
+from src.face_recognition.database import ensure_database_dirs
 
 
 def create_app():
@@ -25,12 +26,19 @@ def create_app():
     )
 
     app = Flask(__name__)
+    ensure_database_dirs()
 
     # ── services ────────────────────────────────────────────────────────
     services = create_service_container()
 
     # ── blueprints ───────────────────────────────────────────────────────
-    app.register_blueprint(arduino_bp, url_prefix="/api/arduino")
+    app.register_blueprint(
+        create_arduino_blueprint(
+            services.device_registry,
+            services.camera_recognition,
+        ),
+        url_prefix="/api/arduino",
+    )
     app.register_blueprint(
         create_face_blueprint(services.face_verification, services.device_control),
         url_prefix="/api",

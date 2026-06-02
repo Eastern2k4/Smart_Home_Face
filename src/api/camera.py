@@ -9,7 +9,7 @@ import logging
 
 from flask import Blueprint, Response, jsonify, request
 
-from src.esp32.sensor_client import ArduinoNotRegistered, ArduinoUnreachable
+from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
 logger = logging.getLogger("camera_api")
 

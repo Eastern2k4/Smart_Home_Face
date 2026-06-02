@@ -1,15 +1,25 @@
 // lib/api/sensors.ts
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+function getApiBase() {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:5001`;
+  }
+
+  return "http://localhost:5001";
+}
 
 export const sensorApi = {
   async getAllSensors() {
-    const res = await fetch(`${API_BASE}/api/sensors`);
+    const res = await fetch(`${getApiBase()}/api/sensors`);
     if (!res.ok) throw new Error("Failed to fetch sensors");
     return res.json();
   },
 
   async getDevices() {
-    const res = await fetch(`${API_BASE}/api/devices`);
+    const res = await fetch(`${getApiBase()}/api/devices`);
     if (!res.ok) throw new Error("Failed to fetch devices");
     return res.json();
   },
@@ -17,7 +27,7 @@ export const sensorApi = {
   async toggleLED(ledId: "wc" | "kitchen" | "bedroom", state: boolean) {
     const action = state ? "on" : "off";
     const res = await fetch(
-      `${API_BASE}/api/control/light/${ledId}/${action}`,
+      `${getApiBase()}/api/control/light/${ledId}/${action}`,
       {
         method: "POST",
       },
@@ -28,7 +38,7 @@ export const sensorApi = {
 
   async setDoor(open: boolean) {
     const action = open ? "open" : "close";
-    const res = await fetch(`${API_BASE}/api/control/door/${action}`, {
+    const res = await fetch(`${getApiBase()}/api/control/door/${action}`, {
       method: "POST",
     });
     if (!res.ok) throw new Error("Failed to control door");
@@ -50,9 +60,11 @@ export const sensorApi = {
     };
   },
 
-  // Placeholder for buzzer – can be added later if needed
   async triggerBuzzer(durationMs: number): Promise<void> {
-    console.warn("Buzzer not implemented");
+    const res = await fetch(`${getApiBase()}/api/speaker/alert`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to trigger speaker alert");
   },
   async muteBuzzer(): Promise<void> {
     console.warn("Buzzer not implemented");

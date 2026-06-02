@@ -1,6 +1,7 @@
 """Face API routes consumed by the frontend dashboard."""
 
 import logging
+import os
 
 from flask import Blueprint, jsonify, request
 
@@ -22,6 +23,16 @@ def create_face_blueprint(face_verification_service, device_control_service):
         name = request.form["name"].strip()
         if not name or file.filename == "":
             return jsonify({"error": "Invalid name or file"}), 400
+        tmp_path = face_verification_service.save_upload_to_temp(file)
+        try:
+            if not face_verification_service.has_face(tmp_path):
+                return jsonify({"error": "No face detected in uploaded image"}), 400
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        file.seek(0)
         face_verification_service.add_face(name, file)
         logger.info("Added face for '%s'", name)
         return jsonify({"success": True, "message": f"Face '{name}' added"})
@@ -31,14 +42,27 @@ def create_face_blueprint(face_verification_service, device_control_service):
         if "image" not in request.files:
             return jsonify({"error": "Missing image"}), 400
         file = request.files["image"]
+        name = request.form.get("name", "").strip()
         if file.filename == "":
             return jsonify({"error": "Empty file"}), 400
-        filepath = face_verification_service.add_host_face(file)
-        logger.info("Added host face at %s", filepath)
+        tmp_path = face_verification_service.save_upload_to_temp(file)
+        try:
+            if not face_verification_service.has_face(tmp_path):
+                return jsonify({"error": "No face detected in uploaded image"}), 400
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        file.seek(0)
+        filepath = face_verification_service.add_host_face(file, name=name or None)
+        logger.info("Added host face '%s' at %s", name or "Hosts", filepath)
         return jsonify(
             {
                 "success": True,
                 "identity": "Hosts",
+                "name": name or "Hosts",
+                "path": filepath,
                 "message": "Host face added",
             }
         )

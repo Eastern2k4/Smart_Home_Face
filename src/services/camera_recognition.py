@@ -2,13 +2,18 @@
 
 import logging
 import os
-import tempfile
 import threading
 import time
+from datetime import datetime
 
 import requests
 
-from src.config import CAMERA_CAPTURE_INTERVAL_SECONDS, STRANGER_ALERT_SECONDS, TEMP_PATH
+from src.config import (
+    CAMERA_CAPTURE_INTERVAL_SECONDS,
+    STRANGER_ALERT_FRAMES,
+    STRANGER_ALERT_SECONDS,
+)
+from src.face_recognition.database import move_temp_capture_to_stranger, save_temp_capture
 from src.face_recognition.models import Capture, RecognitionResult, StrangerTracker
 from src.services.device_control import DeviceControlService
 from src.services.face_verification import FaceVerificationService
@@ -35,6 +40,13 @@ class CameraRecognitionService:
         self._lock = threading.Lock()
         self.last_error_type = None
         self.last_error_message = None
+        self.image_path = None
+        self.stranger_scan_count = 0
+        self.event_id = 0
+        self.event_type = None
+        self.event_message = None
+        self.event_at = None
+        self.updated_at = None
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -58,7 +70,16 @@ class CameraRecognitionService:
                 "threshold": self.current_state.threshold,
                 "door_allowed": self.current_state.classification == "host",
                 "stranger_duration_seconds": self._get_stranger_duration(),
-                "stranger_alert": self.stranger_tracker.last_alert_at is not None,
+                "stranger_scan_count": self.stranger_scan_count,
+                "stranger_alert": self.stranger_scan_count >= STRANGER_ALERT_FRAMES,
+                "image_path": self.image_path,
+                "event_id": self.event_id,
+                "event_type": self.event_type,
+                "event_message": self.event_message,
+                "event_at": self.event_at,
+                "updated_at": self.updated_at,
+                "last_action": self.device_control.last_action(),
+                "error": self.last_error_message,
                 "last_error_type": self.last_error_type,
                 "last_error_message": self.last_error_message,
             }
@@ -100,11 +121,12 @@ class CameraRecognitionService:
                     self.current_state = RecognitionResult(
                         "error", None, None, None, None
                     )
+                    self._touch_locked()
             finally:
                 self._stop_event.wait(CAMERA_CAPTURE_INTERVAL_SECONDS)
 
     def _process_capture(self, image_data):
-        image_path = self.save_temp_capture(image_data)
+        image_path = save_temp_capture(image_data)
         has_face = self.face_verification.has_face(image_path)
         return Capture(image_path, has_face=has_face)
 
@@ -112,6 +134,8 @@ class CameraRecognitionService:
         now = time.time()
         action_result = None
         result = RecognitionResult("no_face", None, None, None, None)
+        should_alert = False
+        stranger_path = None
 
         if capture.has_face:
             result = self.face_verification.classify_host_image(capture.image_path)
@@ -121,21 +145,33 @@ class CameraRecognitionService:
             self.last_error_message = None
             if not capture.has_face or result.classification == "no_face":
                 self.stranger_tracker.reset()
+                self.stranger_scan_count = 0
+                self.image_path = None
                 self.current_state = RecognitionResult(
                     "no_face", None, None, None, None
                 )
             elif result.classification == "host":
                 self.stranger_tracker.reset()
+                self.stranger_scan_count = 0
+                self.image_path = capture.image_path
                 self.current_state = result
                 action_result = result
+                self._set_event_locked(
+                    "host",
+                    f"TRUE - Host recognized ({self._format_confidence(result.confidence)})",
+                )
             elif result.classification == "stranger":
                 self.stranger_tracker.update(now)
+                self.stranger_scan_count += 1
+                self.image_path = capture.image_path
                 self.current_state = result
-
-        try:
-            os.unlink(capture.image_path)
-        except OSError:
-            pass
+                should_alert = self.stranger_scan_count == STRANGER_ALERT_FRAMES
+                if should_alert:
+                    self._set_event_locked(
+                        "stranger_alert",
+                        f"ALERT - Stranger detected on scan {self.stranger_scan_count}",
+                    )
+            self._touch_locked()
 
         if action_result:
             try:
@@ -143,10 +179,49 @@ class CameraRecognitionService:
             except Exception:
                 logger.exception("camera recognition door action failed")
 
+        if result.classification == "stranger":
+            try:
+                self.device_control.handle_non_host_seen("stranger")
+            except Exception:
+                logger.exception("camera recognition close-door action failed")
+            if should_alert:
+                try:
+                    self.device_control.trigger_speaker_alert()
+                    stranger_path = move_temp_capture_to_stranger(capture.image_path)
+                except Exception:
+                    logger.exception("camera recognition stranger alert failed")
+        elif result.classification == "no_face" or not capture.has_face:
+            try:
+                self.device_control.handle_non_host_seen("no_face")
+            except Exception:
+                logger.exception("camera recognition close-door action failed")
+
+        if result.classification != "stranger" or not should_alert:
+            try:
+                os.unlink(capture.image_path)
+            except OSError:
+                pass
+
+        if stranger_path:
+            with self._lock:
+                self.image_path = stranger_path
+                self._touch_locked()
+
+    def _set_event_locked(self, event_type, event_message):
+        self.event_id += 1
+        self.event_type = event_type
+        self.event_message = event_message
+        self.event_at = self._now_iso()
+
+    def _touch_locked(self):
+        self.updated_at = self._now_iso()
+
     @staticmethod
-    def save_temp_capture(image_data: bytes) -> str:
-        os.makedirs(TEMP_PATH, exist_ok=True)
-        fd, path = tempfile.mkstemp(suffix=".jpg", dir=TEMP_PATH)
-        with os.fdopen(fd, "wb") as temp_file:
-            temp_file.write(image_data)
-        return path
+    def _now_iso():
+        return datetime.now().isoformat()
+
+    @staticmethod
+    def _format_confidence(confidence):
+        if confidence is None:
+            return "unknown confidence"
+        return f"{confidence * 100:.1f}%"

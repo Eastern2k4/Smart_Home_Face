@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from src.config import FACE_CONFIDENCE_THRESHOLD, FACE_DETECTOR, HOST_IDENTITY
+from src.config import FACE_CONFIDENCE_THRESHOLD, HOST_IDENTITY
 from src.face_recognition.database import (
     add_face_image,
     add_host_face_image,
@@ -11,7 +11,7 @@ from src.face_recognition.database import (
     get_all_faces,
 )
 from src.face_recognition.models import RecognitionResult
-from src.face_recognition.verifier import verify_against_database
+from src.face_recognition.verifier import FaceNotDetected, has_face, verify_against_database
 
 
 class FaceVerificationService:
@@ -23,8 +23,8 @@ class FaceVerificationService:
     def add_face(self, name: str, image_file):
         return add_face_image(name, image_file)
 
-    def add_host_face(self, image_file):
-        return add_host_face_image(image_file)
+    def add_host_face(self, image_file, name: str | None = None):
+        return add_host_face_image(image_file, name=name)
 
     def delete_face(self, name: str):
         return delete_face(name)
@@ -35,17 +35,7 @@ class FaceVerificationService:
             return tmp.name
 
     def has_face(self, image_path: str) -> bool:
-        try:
-            from deepface import DeepFace
-
-            faces = DeepFace.extract_faces(
-                img_path=image_path,
-                detector_backend=FACE_DETECTOR,
-                enforce_detection=True,
-            )
-            return len(faces) > 0
-        except Exception:
-            return False
+        return has_face(image_path)
 
     def classify_host_image(self, image_path: str) -> RecognitionResult:
         return self.classify_image(image_path, allowed_identities={HOST_IDENTITY})
@@ -56,9 +46,12 @@ class FaceVerificationService:
         if not self.has_face(image_path):
             return RecognitionResult("no_face", None, None, None, None)
 
-        match = verify_against_database(
-            image_path, allowed_identities=allowed_identities
-        )
+        try:
+            match = verify_against_database(
+                image_path, allowed_identities=allowed_identities
+            )
+        except FaceNotDetected:
+            return RecognitionResult("no_face", None, None, None, None)
         if not match:
             return RecognitionResult("stranger", None, None, None, None)
 

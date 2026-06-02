@@ -9,10 +9,7 @@ import logging
 
 from flask import Blueprint, jsonify
 
-from src.esp32.sensor_client import (
-    ArduinoNotRegistered,
-    ArduinoUnreachable,
-)
+from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
 logger = logging.getLogger("devices_api")
 
@@ -80,5 +77,12 @@ def create_devices_blueprint(device_control_service):
     @devices_bp.route("/devices", methods=["GET"])
     def get_device_states():
         return _arduino_call(device_control_service.get_device_states)
+
+    @devices_bp.route("/speaker/alert", methods=["POST"])
+    def speaker_alert():
+        def _trigger():
+            return device_control_service.trigger_speaker_alert().response
+
+        return _arduino_call(_trigger)
 
     return devices_bp
