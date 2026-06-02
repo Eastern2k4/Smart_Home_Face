@@ -24,10 +24,8 @@ bool doorServoAttached = false;
 bool indoorAlarmActive = false;
 bool indoorAlarmEnabled = true;
 bool gasAlarmActive = false;
-bool temperatureAlarmActive = false;
 bool humidityAlarmActive = false;
 int gasAlarmThreshold = DEFAULT_GAS_ALARM_THRESHOLD;
-float temperatureAlarmThreshold = DEFAULT_TEMPERATURE_ALARM_THRESHOLD;
 float humidityAlarmThreshold = DEFAULT_HUMIDITY_ALARM_THRESHOLD;
 unsigned long lastAlarmCheckMs = 0;
 unsigned long frontDoorSpeakerAlertUntilMs = 0;
@@ -125,19 +123,12 @@ void forceAllSpeakersOff() {
 
 void updateIndoorAlarm() {
   int gasValue = analogRead(GAS_PIN);
-  float livingTemp = dhtLiving.readTemperature();
   float livingHum = dhtLiving.readHumidity();
-  float bedroomTemp = dhtBedroom.readTemperature();
   float bedroomHum = dhtBedroom.readHumidity();
 
   gasAlarmActive = gasAlarmActive
     ? gasValue >= gasAlarmThreshold - GAS_ALARM_HYSTERESIS
     : gasValue > gasAlarmThreshold;
-  temperatureAlarmActive = temperatureAlarmActive
-    ? (!isnan(livingTemp) && livingTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS) ||
-      (!isnan(bedroomTemp) && bedroomTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS)
-    : (!isnan(livingTemp) && livingTemp > temperatureAlarmThreshold) ||
-      (!isnan(bedroomTemp) && bedroomTemp > temperatureAlarmThreshold);
   humidityAlarmActive = humidityAlarmActive
     ? (!isnan(livingHum) && livingHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS) ||
       (!isnan(bedroomHum) && bedroomHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS)
@@ -146,7 +137,7 @@ void updateIndoorAlarm() {
 
   setIndoorSpeakers(
     indoorAlarmEnabled &&
-    (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive)
+    (gasAlarmActive || humidityAlarmActive)
   );
 
   bool frontDoorSpeakerAlertActive =
@@ -179,10 +170,8 @@ void handleRoot() {
 void handleSensors() {
   sendCORS();
 
-  float livingTemp = dhtLiving.readTemperature();
   float livingHum = dhtLiving.readHumidity();
 
-  float bedroomTemp = dhtBedroom.readTemperature();
   float bedroomHum = dhtBedroom.readHumidity();
 
   int gasValue = analogRead(GAS_PIN);
@@ -193,12 +182,10 @@ void handleSensors() {
   String json = "{";
 
   json += "\"livingRoom\":{";
-  json += "\"temperature\":" + jsonFloat(livingTemp) + ",";
   json += "\"humidity\":" + jsonFloat(livingHum);
   json += "},";
 
   json += "\"bedroom\":{";
-  json += "\"temperature\":" + jsonFloat(bedroomTemp) + ",";
   json += "\"humidity\":" + jsonFloat(bedroomHum);
   json += "},";
 
@@ -232,7 +219,6 @@ void handleDevices() {
   json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
-  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
   json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
   json += "}";
   json += "}";
@@ -319,12 +305,10 @@ void handleSpeakerSettings() {
   String json = "{";
   json += "\"enabled\":" + String(indoorAlarmEnabled ? "true" : "false") + ",";
   json += "\"gasThreshold\":" + String(gasAlarmThreshold) + ",";
-  json += "\"temperatureThreshold\":" + String(temperatureAlarmThreshold) + ",";
   json += "\"humidityThreshold\":" + String(humidityAlarmThreshold) + ",";
   json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
-  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
   json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
   json += "}";
   json += "}";
@@ -336,23 +320,21 @@ void handleSpeakerSettingsUpdate() {
   sendCORS();
 
   if (!server.hasArg("enabled") || !server.hasArg("gas") ||
-      !server.hasArg("temperature") || !server.hasArg("humidity")) {
+      !server.hasArg("humidity")) {
     server.send(400, "application/json", "{\"error\":\"Missing speaker settings\"}");
     return;
   }
 
   int newGasThreshold = server.arg("gas").toInt();
-  float newTemperatureThreshold = server.arg("temperature").toFloat();
   float newHumidityThreshold = server.arg("humidity").toFloat();
 
-  if (newGasThreshold < 0 || newTemperatureThreshold <= 0 || newHumidityThreshold <= 0) {
+  if (newGasThreshold < 0 || newHumidityThreshold <= 0) {
     server.send(400, "application/json", "{\"error\":\"Invalid speaker thresholds\"}");
     return;
   }
 
   indoorAlarmEnabled = server.arg("enabled") == "true";
   gasAlarmThreshold = newGasThreshold;
-  temperatureAlarmThreshold = newTemperatureThreshold;
   humidityAlarmThreshold = newHumidityThreshold;
   updateIndoorAlarm();
   handleSpeakerSettings();

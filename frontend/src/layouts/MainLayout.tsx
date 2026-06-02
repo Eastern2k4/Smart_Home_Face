@@ -2,13 +2,13 @@
 import {
   Bell,
   Camera,
+  Gauge,
   Home,
   LayoutDashboard,
   Lightbulb,
   Search,
   Settings,
   Speaker,
-  Thermometer,
   User,
   UserCheck,
 } from "lucide-react";
@@ -27,7 +27,7 @@ type PageId =
 
 const navItems: Array<{ id: PageId; label: string; icon: typeof Home }> = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
-  { id: "sensors", label: "Cảm biến", icon: Thermometer },
+  { id: "sensors", label: "Cảm biến", icon: Gauge },
   { id: "lights", label: "Đèn", icon: Lightbulb },
   { id: "camera", label: "Cửa ra vào", icon: Camera },
   { id: "face-id", label: "Face ID", icon: UserCheck },
@@ -175,4 +175,3 @@ export function MainLayout({
     </main>
   );
 }
-

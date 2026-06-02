@@ -15,8 +15,8 @@ export interface LedState {
 }
 
 export interface SensorData {
-  livingRoom: { temperature: number; humidity: number };
-  bedroom: { temperature: number; humidity: number };
+  livingRoom: { humidity: number | null };
+  bedroom: { humidity: number | null };
   kitchen: { distance: number };
   wc: { distance: number };
   gas: number;
@@ -62,8 +62,8 @@ interface Store {
 
 export const useStore = create<Store>((set, get) => ({
   sensors: {
-    livingRoom: { temperature: 0, humidity: 0 },
-    bedroom: { temperature: 0, humidity: 0 },
+    livingRoom: { humidity: null },
+    bedroom: { humidity: null },
     kitchen: { distance: 0 },
     wc: { distance: 0 },
     gas: 0,

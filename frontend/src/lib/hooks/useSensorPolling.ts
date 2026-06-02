@@ -2,6 +2,13 @@ import { useEffect, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { sensorApi } from "@/lib/api/sensors";
 
+function firstDefined<T>(...values: Array<T | undefined>): T | null {
+  for (const value of values) {
+    if (value !== undefined) return value;
+  }
+  return null;
+}
+
 export function useSensorPolling() {
   const store = useStore();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -16,26 +23,17 @@ export function useSensorPolling() {
         const rawSensors = await sensorApi.getAllSensors();
         const sensors = {
           livingRoom: {
-            temperature:
-              rawSensors.livingRoom?.temperature ??
-              rawSensors.temperature ??
-              rawSensors.temp ??
-              0,
-            humidity:
+            humidity: firstDefined(
               rawSensors.livingRoom?.humidity ??
-              rawSensors.humidity ??
-              rawSensors.hum ??
-              0,
+                rawSensors.humidity ??
+                rawSensors.hum,
+            ),
           },
           bedroom: {
-            temperature:
-              rawSensors.bedroom?.temperature ??
-              rawSensors.bedroomTemperature ??
-              0,
-            humidity:
+            humidity: firstDefined(
               rawSensors.bedroom?.humidity ??
-              rawSensors.bedroomHumidity ??
-              0,
+                rawSensors.bedroomHumidity,
+            ),
           },
           kitchen: {
             distance:
