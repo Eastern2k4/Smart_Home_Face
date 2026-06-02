@@ -6,7 +6,10 @@ import logging
 import sys
 from flask import Flask
 from src.api.arduino import arduino_bp
-from src.api.frontend import frontend_bp
+from src.api.camera import create_camera_blueprint
+from src.api.devices import create_devices_blueprint
+from src.api.face import create_face_blueprint
+from src.dependencies.services import create_service_container
 
 
 def create_app():
@@ -23,9 +26,23 @@ def create_app():
 
     app = Flask(__name__)
 
+    # ── services ────────────────────────────────────────────────────────
+    services = create_service_container()
+
     # ── blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(arduino_bp, url_prefix="/api/arduino")
-    app.register_blueprint(frontend_bp, url_prefix="/api")
+    app.register_blueprint(
+        create_face_blueprint(services.face_verification, services.device_control),
+        url_prefix="/api",
+    )
+    app.register_blueprint(
+        create_devices_blueprint(services.device_control),
+        url_prefix="/api",
+    )
+    app.register_blueprint(
+        create_camera_blueprint(services.camera_recognition),
+        url_prefix="/api",
+    )
 
     # ── CORS ─────────────────────────────────────────────────────────────
     @app.after_request
