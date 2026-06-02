@@ -1,29 +1,43 @@
 // src/lib/hooks/useCameraStream.ts
 import { useEffect, useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+function getApiBases() {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return [process.env.NEXT_PUBLIC_BACKEND_URL];
+  }
+
+  return [
+    `${window.location.protocol}//${window.location.hostname}:5001`,
+    "http://localhost:5001",
+  ];
+}
 
 export function useCameraStream() {
   const [streamUrl, setStreamUrl] = useState("");
 
   useEffect(() => {
-    const fetchStreamUrl = () => {
-      fetch(`${API_BASE}/api/arduino/status`)
-        .then((res) => res.json())
-        .then((data) => {
+    const apiBases = getApiBases();
+
+    const fetchStreamUrl = async () => {
+      for (const apiBase of apiBases) {
+        try {
+          const res = await fetch(`${apiBase}/api/arduino/status`);
+          if (!res.ok) continue;
+
+          const data = await res.json();
           const directStreamUrl =
             data.camera_node?.stream_url || data.camera_node?.device?.stream_url;
 
           if (data.camera_node?.connected && directStreamUrl) {
             setStreamUrl(directStreamUrl);
-          } else {
-            setStreamUrl("");
+            return;
           }
-        })
-        .catch((err) => {
+        } catch (err) {
           console.error("Failed to fetch stream URL", err);
-          setStreamUrl("");
-        });
+        }
+      }
+
+      setStreamUrl("");
     };
 
     fetchStreamUrl();

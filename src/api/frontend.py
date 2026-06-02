@@ -13,6 +13,7 @@ import logging
 import tempfile
 import os
 
+import requests
 from flask import Blueprint, request, jsonify, Response
 import src.state as state
 
@@ -28,7 +29,11 @@ from src.face_recognition.camera_monitor import (
     start_monitor,
     stop_monitor,
 )
-from src.face_recognition.verifier import FaceNotDetected, verify_against_database
+from src.face_recognition.verifier import (
+    FaceNotDetected,
+    has_face,
+    verify_against_database,
+)
 from src.esp32.camera_client import CameraClient
 from src.esp32.sensor_client import (
     SensorNodeClient,
@@ -44,6 +49,20 @@ frontend_bp = Blueprint("frontend", __name__)
 sensor_client = SensorNodeClient()
 camera_client = CameraClient()
 orchestrator = ActionOrchestrator(sensor_client)
+
+
+def _uploaded_file_has_face(file):
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+    try:
+        return has_face(tmp_path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        file.seek(0)
 
 
 # ── error-wrapping helper ─────────────────────────────────────────────────────
@@ -101,6 +120,8 @@ def add_face():
     name = request.form["name"].strip()
     if not name or file.filename == "":
         return jsonify({"error": "Invalid name or file"}), 400
+    if not _uploaded_file_has_face(file):
+        return jsonify({"error": "No face detected in uploaded image"}), 400
     add_face_image(name, file)
     logger.info("Added face for '%s'", name)
     return jsonify({"success": True, "message": f"Face '{name}' added"})
@@ -116,6 +137,8 @@ def add_host_face():
         return jsonify({"error": "Empty file"}), 400
     if not name:
         return jsonify({"error": "Missing host name"}), 400
+    if not _uploaded_file_has_face(file):
+        return jsonify({"error": "No face detected in uploaded image"}), 400
     filepath = add_host_face_image(file, name=name)
     logger.info("Added host face '%s' at %s", name, filepath)
     return jsonify(

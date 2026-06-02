@@ -6,10 +6,36 @@
 #include <HTTPClient.h>
 
 // WiFi credentials (must match the extern in config.h)
-const char* WIFI_SSID = "67676767";
-const char* WIFI_PASSWORD = "67676767";
-const char* BACKEND_HOST = "10.16.136.165";
+const char* WIFI_SSID = "Eastern";
+const char* WIFI_PASSWORD = "eastern123";
+const char* BACKEND_HOST = "172.20.10.8";
 const int BACKEND_PORT = 5001;
+const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
+unsigned long lastBackendRegisterMs = 0;
+
+void registerCameraWithBackend() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Camera register skipped: WiFi not connected");
+        return;
+    }
+
+    HTTPClient http;
+    String url =
+        "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) +
+        "/api/arduino/register/camera";
+    String body = "{\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+
+    int responseCode = http.POST(body);
+    Serial.print("Camera Register Response: ");
+    Serial.println(responseCode);
+    Serial.println(http.getString());
+
+    http.end();
+    lastBackendRegisterMs = millis();
+}
 
 void setup() {
     Serial.begin(9600);
@@ -39,35 +65,7 @@ void setup() {
     String ip = WiFi.localIP().toString();
     Serial.println(ip);
 
-HTTPClient http;
-
-http.begin(
-  "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/camera"
-);
-
-http.addHeader(
-  "Content-Type",
-  "application/json"
-);
-
-String body = "{";
-
-body += "\"ip\":\"" + ip + "\"";
-
-body += "}";
-
-int responseCode =
-  http.POST(body);
-
-Serial.print("Register Response: ");
-Serial.println(responseCode);
-
-String response =
-  http.getString();
-
-Serial.println(response);
-
-http.end();
+    registerCameraWithBackend();
     Serial.println(WiFi.localIP());
 
     // Start HTTP servers
@@ -77,5 +75,9 @@ http.end();
 void loop() {
     // Nothing here – everything is handled by the web server
     // If you need periodic tasks, add them here
+    if (WiFi.status() == WL_CONNECTED &&
+        millis() - lastBackendRegisterMs >= BACKEND_REGISTER_INTERVAL_MS) {
+        registerCameraWithBackend();
+    }
     delay(10);
 }

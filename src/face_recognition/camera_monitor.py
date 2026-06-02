@@ -7,7 +7,8 @@ from datetime import datetime
 
 from src.config import (
     CAMERA_CAPTURE_INTERVAL_SECONDS,
-    FACE_CONFIDENCE_THRESHOLD,
+    DOOR_CLOSE_STABLE_FRAMES,
+    STRANGER_ALERT_FRAMES,
     STRANGER_ALERT_SECONDS,
 )
 from src.esp32.camera_client import CameraClient
@@ -30,6 +31,9 @@ _thread = None
 _stop_event = threading.Event()
 _stranger_started_at = None
 _last_stranger_saved_at = None
+_last_commanded_door_open = None
+_non_host_frames = 0
+_stranger_scan_count = 0
 _status = {
     "running": False,
     "door_allowed": False,
@@ -38,6 +42,7 @@ _status = {
     "confidence": None,
     "image_path": None,
     "stranger_duration_seconds": 0,
+    "stranger_scan_count": 0,
     "stranger_alert": False,
     "event_id": 0,
     "event_type": None,
@@ -105,32 +110,82 @@ def _open_door():
         return {"success": False, "error": str(e)}
 
 
+def _close_door():
+    try:
+        return SensorNodeClient().door_close()
+    except Exception as e:
+        logger.warning("Could not close door after stranger recognition: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+def _trigger_speaker_alert():
+    try:
+        return SensorNodeClient().speaker_alert()
+    except Exception as e:
+        logger.warning("Could not trigger speaker alert: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+def _command_door(open_door):
+    global _last_commanded_door_open
+    if _last_commanded_door_open == open_door:
+        return {"success": True, "skipped": True}
+
+    result = _open_door() if open_door else _close_door()
+    if result.get("success", False):
+        _last_commanded_door_open = open_door
+    return result
+
+
+def _mark_host_seen():
+    global _non_host_frames, _stranger_scan_count
+    _non_host_frames = 0
+    _stranger_scan_count = 0
+    return _command_door(True)
+
+
+def _mark_non_host_seen():
+    global _non_host_frames
+    _non_host_frames += 1
+    if _non_host_frames < DOOR_CLOSE_STABLE_FRAMES:
+        return {"success": True, "skipped": True, "reason": "waiting_for_stable_non_host"}
+    return _command_door(False)
+
+
 def _reset_stranger_tracking():
-    global _stranger_started_at
+    global _stranger_started_at, _stranger_scan_count
     _stranger_started_at = None
+    _stranger_scan_count = 0
 
 
 def _handle_stranger(image_path):
-    global _stranger_started_at, _last_stranger_saved_at
+    global _stranger_started_at, _last_stranger_saved_at, _stranger_scan_count
 
     now = time.time()
     if _stranger_started_at is None:
         _stranger_started_at = now
 
+    _stranger_scan_count += 1
+    _mark_non_host_seen()
+
     duration = now - _stranger_started_at
-    should_alert = duration >= STRANGER_ALERT_SECONDS
+    should_alert = _stranger_scan_count >= STRANGER_ALERT_FRAMES
     saved_path = None
 
-    if should_alert and (
+    if _stranger_scan_count == STRANGER_ALERT_FRAMES:
+        _trigger_speaker_alert()
+        saved_path = move_temp_capture_to_stranger(image_path)
+        _last_stranger_saved_at = now
+        _set_recognition_event(
+            "stranger_alert",
+            f"ALERT - Stranger detected on scan {_stranger_scan_count}",
+        )
+    elif should_alert and (
         _last_stranger_saved_at is None
         or now - _last_stranger_saved_at >= STRANGER_ALERT_SECONDS
     ):
         saved_path = move_temp_capture_to_stranger(image_path)
         _last_stranger_saved_at = now
-        _set_recognition_event(
-            "stranger_alert",
-            "ALERT - Stranger detected continuously for 5 minutes",
-        )
 
     _set_status(
         door_allowed=False,
@@ -139,6 +194,7 @@ def _handle_stranger(image_path):
         confidence=None,
         image_path=saved_path or image_path,
         stranger_duration_seconds=round(duration, 1),
+        stranger_scan_count=_stranger_scan_count,
         stranger_alert=should_alert,
         error=None,
     )
@@ -153,6 +209,7 @@ def _process_capture(image_data):
 
         if not has_face(probe_path):
             _reset_stranger_tracking()
+            _mark_non_host_seen()
             _set_status(
                 door_allowed=False,
                 classification="no_face",
@@ -160,6 +217,7 @@ def _process_capture(image_data):
                 confidence=None,
                 image_path=None,
                 stranger_duration_seconds=0,
+                stranger_scan_count=0,
                 stranger_alert=False,
                 error=None,
             )
@@ -177,6 +235,7 @@ def _process_capture(image_data):
         match = verify_against_database(image_path, allowed_identities={HOST_IDENTITY})
     except FaceNotDetected:
         _reset_stranger_tracking()
+        _mark_non_host_seen()
         _set_status(
             door_allowed=False,
             classification="no_face",
@@ -184,6 +243,7 @@ def _process_capture(image_data):
             confidence=None,
             image_path=image_path,
             stranger_duration_seconds=0,
+            stranger_scan_count=0,
             stranger_alert=False,
             error=None,
         )
@@ -191,24 +251,24 @@ def _process_capture(image_data):
 
     if match:
         confidence = _confidence_from_match(match)
-        if confidence >= FACE_CONFIDENCE_THRESHOLD:
-            _reset_stranger_tracking()
-            _open_door()
-            _set_recognition_event(
-                "host",
-                f"TRUE - Host recognized ({confidence:.1f}%)",
-            )
-            _set_status(
-                door_allowed=True,
-                classification="host",
-                identity=HOST_IDENTITY,
-                confidence=round(confidence, 1),
-                image_path=image_path,
-                stranger_duration_seconds=0,
-                stranger_alert=False,
-                error=None,
-            )
-            return
+        _reset_stranger_tracking()
+        _mark_host_seen()
+        _set_recognition_event(
+            "host",
+            f"TRUE - Host recognized ({confidence:.1f}%)",
+        )
+        _set_status(
+            door_allowed=True,
+            classification="host",
+            identity=HOST_IDENTITY,
+            confidence=round(confidence, 1),
+            image_path=image_path,
+            stranger_duration_seconds=0,
+            stranger_scan_count=0,
+            stranger_alert=False,
+            error=None,
+        )
+        return
 
     _handle_stranger(image_path)
 
@@ -216,6 +276,7 @@ def _process_capture(image_data):
 def _run_loop():
     client = CameraClient()
     _set_status(running=True, error=None)
+    _command_door(False)
 
     while not _stop_event.is_set():
         try:
