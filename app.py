@@ -422,14 +422,17 @@ def verify_face():
                         # silent is NOT allowed here – remove it
                     )
                     if result.get("verified"):
-                        distance = result.get("distance", 1.0)
-                        if distance < min_distance:
+                        threshold = result.get("threshold") or 1.0
+                        distance = result.get("distance", threshold)
+                        confidence = max(0.0, min(100.0, ((threshold - distance) / threshold) * 100.0)) if threshold > 0 else 0.0
+
+                        if confidence > 60.0 and distance < min_distance:
                             min_distance = distance
                             best_match = {
                                 "identity": person,
                                 "distance": distance,
                                 "threshold": result.get("threshold"),
-                                # "confidence": result.get("confidence"),
+                                "confidence": confidence,
                                 "similarity_metric": result.get("similarity_metric"),
                             }
                 except Exception as e:
@@ -674,10 +677,15 @@ def upload_frame():
                     enforce_detection=False,
                     silent=True,
                 )
-                best_match["verified"] = verify_result.get("verified", False)
-                best_match["confidence"] = verify_result.get("confidence", None)
-                best_match["distance"] = verify_result.get("distance", None)
-                best_match["threshold"] = verify_result.get("threshold", None)
+
+                    threshold = verify_result.get("threshold") or 1.0
+                    distance = verify_result.get("distance", threshold)
+                    confidence = max(0.0, min(100.0, ((threshold - distance) / threshold) * 100.0)) if threshold > 0 else 0.0
+
+                    best_match["verified"] = verify_result.get("verified", False) and confidence > 60.0
+                    best_match["confidence"] = confidence
+                    best_match["distance"] = distance
+                    best_match["threshold"] = threshold
                 best_match["similarity_metric"] = verify_result.get(
                     "similarity_metric", None
                 )

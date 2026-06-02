@@ -108,6 +108,9 @@ class SensorNodeClient:
             f"&duration={duration}"
         )
 
+    def set_speaker_volume(self, speaker_id: int, volume: int):
+        return self._request(f"/api/speaker/volume?speakerId={speaker_id}&volume={volume}", method="POST")
+
     def speaker_test(self, target: str):
         return self._request(f"/api/speaker/test?target={target}", timeout=35)
 

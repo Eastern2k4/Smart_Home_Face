@@ -20,6 +20,7 @@ CAMERA_CAPTURE_INTERVAL_SECONDS = float(
 STRANGER_ALERT_SECONDS = float(os.environ.get("STRANGER_ALERT_SECONDS", "300"))
 STRANGER_ALERT_FRAMES = int(os.environ.get("STRANGER_ALERT_FRAMES", "5"))
 DOOR_CLOSE_STABLE_FRAMES = int(os.environ.get("DOOR_CLOSE_STABLE_FRAMES", "2"))
+HOST_DOOR_HOLD_SECONDS = float(os.environ.get("HOST_DOOR_HOLD_SECONDS", "8"))
 TEMP_MAX_IMAGES = int(os.environ.get("TEMP_MAX_IMAGES", "100"))
 
 # Environment variables (can be overridden)

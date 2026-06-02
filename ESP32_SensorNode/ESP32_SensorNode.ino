@@ -7,12 +7,12 @@
 #include <HTTPClient.h>
 
 // ================= BACKEND REGISTRATION =================
-const char* backendHost = "172.20.10.8";   // Replace with your Flask server's IP address
+const char* backendHost = "172.16.3.201";   // Replace with your Flask server's IP address
 const int backendPort = 5001;
 
 // ================= WIFI CONFIG =================
-const char* ssid = "Eastern";
-const char* password = "eastern123";
+const char* ssid = "TRAM 247 STUDY CAFE & WORKSPACE";
+const char* password = "tramloveyou";
 
 // ================= SERVER =================
 WebServer server(80);
@@ -52,9 +52,7 @@ WebServer server(80);
 // Speaker sine-wave PWM config.
 #define SPEAKER_PWM_FREQ       20000
 #define SPEAKER_PWM_RESOLUTION 8
-#define SPEAKER_FRONT_CHANNEL  4
-#define SPEAKER_KHACH_CHANNEL  5
-#define SPEAKER_NGU_CHANNEL    6
+#define SPEAKER_INACTIVE_LEVEL LOW
 #define SINE_SAMPLE_COUNT      32
 
 // ================= OBJECTS =================
@@ -84,6 +82,7 @@ const unsigned long ALARM_CHECK_INTERVAL_MS = 2500;
 unsigned long lastBackendRegisterMs = 0;
 const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
 unsigned long frontDoorSpeakerAlertUntilMs = 0;
+unsigned long indoorSpeakerAlertUntilMs = 0;
 unsigned long speakerAlertDurationMs = 5000;
 int frontDoorSpeakerVolume = 80;
 int indoorSpeakerVolume = 60;
@@ -194,12 +193,9 @@ void configureSpeakerPwm() {
   if (speakersPwmReady) {
     return;
   }
-  ledcSetup(SPEAKER_FRONT_CHANNEL, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcSetup(SPEAKER_KHACH_CHANNEL, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcSetup(SPEAKER_NGU_CHANNEL, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcAttachPin(LOA_TRUOC, SPEAKER_FRONT_CHANNEL);
-  ledcAttachPin(LOA_KHACH, SPEAKER_KHACH_CHANNEL);
-  ledcAttachPin(LOA_NGU, SPEAKER_NGU_CHANNEL);
+  ledcAttach(LOA_TRUOC, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  ledcAttach(LOA_KHACH, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  ledcAttach(LOA_NGU, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
   speakersPwmReady = true;
 }
 
@@ -211,9 +207,9 @@ int sineDutyForVolume(int volume) {
 
 void writeSpeakerSine(bool frontActive, bool indoorActive) {
   configureSpeakerPwm();
-  ledcWrite(SPEAKER_FRONT_CHANNEL, frontActive ? sineDutyForVolume(frontDoorSpeakerVolume) : 0);
-  ledcWrite(SPEAKER_KHACH_CHANNEL, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
-  ledcWrite(SPEAKER_NGU_CHANNEL, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
+  ledcWrite(LOA_TRUOC, frontActive ? sineDutyForVolume(frontDoorSpeakerVolume) : 0);
+  ledcWrite(LOA_KHACH, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
+  ledcWrite(LOA_NGU, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
 }
 
 void updateSpeakerWaveforms() {
@@ -248,12 +244,14 @@ void setFrontDoorSpeaker(bool on) {
 }
 
 void forceAllSpeakersOff() {
-  configureSpeakerPwm();
+  pinMode(LOA_TRUOC, OUTPUT);
+  pinMode(LOA_KHACH, OUTPUT);
+  pinMode(LOA_NGU, OUTPUT);
   frontDoorSpeakerAlertUntilMs = 0;
   indoorAlarmActive = false;
-  ledcWrite(SPEAKER_FRONT_CHANNEL, 0);
-  ledcWrite(SPEAKER_KHACH_CHANNEL, 0);
-  ledcWrite(SPEAKER_NGU_CHANNEL, 0);
+  digitalWrite(LOA_TRUOC, SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(LOA_KHACH, SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(LOA_NGU, SPEAKER_INACTIVE_LEVEL);
 }
 
 void updateIndoorAlarm() {
@@ -277,9 +275,10 @@ void updateIndoorAlarm() {
       : (!isnan(livingHum) && livingHum > humidityAlarmThreshold) ||
       (!isnan(bedroomHum) && bedroomHum > humidityAlarmThreshold);
 
+  bool isIndoorTestActive = indoorSpeakerAlertUntilMs != 0 && millis() < indoorSpeakerAlertUntilMs;
   setIndoorSpeakers(
-    indoorAlarmEnabled &&
-    (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive)
+    isIndoorTestActive ||
+    (indoorAlarmEnabled && (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive))
   );
 
   bool frontDoorSpeakerAlertActive =
@@ -531,24 +530,29 @@ void handleSpeakerTest() {
   sendCORS();
   String target = server.arg("target");
   if (target == "indoor") {
-    indoorAlarmActive = true;
-    unsigned long stopAt = millis() + speakerAlertDurationMs;
-    while (millis() < stopAt) {
-      updateSpeakerWaveforms();
-      delay(1);
-    }
-    indoorAlarmActive = false;
-    forceAllSpeakersOff();
+    indoorSpeakerAlertUntilMs = millis() + speakerAlertDurationMs;
   } else {
     frontDoorSpeakerAlertUntilMs = millis() + speakerAlertDurationMs;
-    unsigned long stopAt = frontDoorSpeakerAlertUntilMs;
-    while (millis() < stopAt) {
-      updateSpeakerWaveforms();
-      delay(1);
-    }
-    forceAllSpeakersOff();
   }
+  updateIndoorAlarm(); // Cập nhật trạng thái loa ngay lập tức
   server.send(200, "application/json", "{\"success\":true,\"waveform\":\"sine\"}");
+}
+
+// POST /api/speaker/volume?speakerId=1&volume=50
+void handleSpeakerVolume() {
+  sendCORS();
+  if (server.hasArg("speakerId") && server.hasArg("volume")) {
+    int id = server.arg("speakerId").toInt();
+    int vol = server.arg("volume").toInt();
+    if (id == 1) {
+      indoorSpeakerVolume = constrain(vol, 0, 100);
+    } else if (id == 2) {
+      frontDoorSpeakerVolume = constrain(vol, 0, 100);
+    }
+    server.send(200, "application/json", "{\"success\":true}");
+  } else {
+    server.send(400, "application/json", "{\"error\":\"Missing speakerId or volume\"}");
+  }
 }
 
 // ================= SETUP =================
@@ -622,6 +626,9 @@ void setup() {
   server.on("/api/speaker/settings", HTTP_GET, handleSpeakerSettings);
   server.on("/api/speaker/settings/update", HTTP_GET, handleSpeakerSettingsUpdate);
   server.on("/api/speaker/alert", HTTP_GET, handleSpeakerAlert);
+  server.on("/api/speaker/audio/update", HTTP_GET, handleSpeakerAudioUpdate);
+  server.on("/api/speaker/test", HTTP_GET, handleSpeakerTest);
+  server.on("/api/speaker/volume", HTTP_POST, handleSpeakerVolume);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -630,6 +637,7 @@ void setup() {
 // ================= LOOP =================
 void loop() {
   server.handleClient();
+  updateSpeakerWaveforms(); // CHÚ Ý: Phải gọi liên tục để tạo sóng Sin mượt
 
   if (WiFi.status() == WL_CONNECTED &&
       millis() - lastBackendRegisterMs >= BACKEND_REGISTER_INTERVAL_MS) {
@@ -639,6 +647,16 @@ void loop() {
   unsigned long now = millis();
   if (now - lastAlarmCheckMs >= ALARM_CHECK_INTERVAL_MS) {
     lastAlarmCheckMs = now;
+    updateIndoorAlarm();
+  }
+
+  // Tự động tắt loa nếu hết thời gian Test/Hú còi
+  if (frontDoorSpeakerAlertUntilMs != 0 && now >= frontDoorSpeakerAlertUntilMs) {
+    frontDoorSpeakerAlertUntilMs = 0;
+    updateIndoorAlarm();
+  }
+  if (indoorSpeakerAlertUntilMs != 0 && now >= indoorSpeakerAlertUntilMs) {
+    indoorSpeakerAlertUntilMs = 0;
     updateIndoorAlarm();
   }
 }
