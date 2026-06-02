@@ -8,6 +8,7 @@ from datetime import datetime
 from src.config import (
     CAMERA_CAPTURE_INTERVAL_SECONDS,
     DOOR_CLOSE_STABLE_FRAMES,
+    FACE_CONFIDENCE_THRESHOLD,
     STRANGER_ALERT_FRAMES,
     STRANGER_ALERT_SECONDS,
 )
@@ -251,24 +252,25 @@ def _process_capture(image_data):
 
     if match:
         confidence = _confidence_from_match(match)
-        _reset_stranger_tracking()
-        _mark_host_seen()
-        _set_recognition_event(
-            "host",
-            f"TRUE - Host recognized ({confidence:.1f}%)",
-        )
-        _set_status(
-            door_allowed=True,
-            classification="host",
-            identity=HOST_IDENTITY,
-            confidence=round(confidence, 1),
-            image_path=image_path,
-            stranger_duration_seconds=0,
-            stranger_scan_count=0,
-            stranger_alert=False,
-            error=None,
-        )
-        return
+        if confidence >= FACE_CONFIDENCE_THRESHOLD:
+            _reset_stranger_tracking()
+            _mark_host_seen()
+            _set_recognition_event(
+                "host",
+                f"TRUE - Host recognized ({confidence:.1f}%)",
+            )
+            _set_status(
+                door_allowed=True,
+                classification="host",
+                identity=HOST_IDENTITY,
+                confidence=round(confidence, 1),
+                image_path=image_path,
+                stranger_duration_seconds=0,
+                stranger_scan_count=0,
+                stranger_alert=False,
+                error=None,
+            )
+            return
 
     _handle_stranger(image_path)
 

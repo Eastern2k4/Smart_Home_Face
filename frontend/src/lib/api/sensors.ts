@@ -67,4 +67,33 @@ export const sensorApi = {
   async muteBuzzer(): Promise<void> {
     console.warn("Buzzer not implemented");
   },
+
+  async getSpeakerSettings() {
+    const res = await fetch(`${getApiBase()}/api/speaker/settings`);
+    if (!res.ok) throw new Error("Failed to load speaker settings");
+    return res.json();
+  },
+
+  async updateSpeakerAudio(settings: {
+    frontVolume: number;
+    indoorVolume: number;
+    frequency: number;
+    duration: number;
+  }) {
+    const res = await fetch(`${getApiBase()}/api/speaker/audio`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error("Failed to update speaker audio");
+    return res.json();
+  },
+
+  async testSpeaker(target: "front" | "indoor") {
+    const res = await fetch(`${getApiBase()}/api/speaker/test/${target}`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to test speaker");
+    return res.json();
+  },
 };

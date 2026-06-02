@@ -288,6 +288,30 @@ def control_light(room, on_off):
     return jsonify({"error": "invalid room"}), 400
 
 
+@frontend_bp.route("/speaker/settings", methods=["GET"])
+def speaker_settings():
+    return _arduino_call(sensor_client.speaker_settings)
+
+
+@frontend_bp.route("/speaker/audio", methods=["POST"])
+def update_speaker_audio():
+    data = request.get_json(silent=True) or {}
+    return _arduino_call(
+        sensor_client.update_speaker_audio,
+        int(data.get("frontVolume", 80)),
+        int(data.get("indoorVolume", 60)),
+        int(data.get("frequency", 880)),
+        int(data.get("duration", 5000)),
+    )
+
+
+@frontend_bp.route("/speaker/test/<target>", methods=["POST"])
+def speaker_test(target):
+    if target not in ("front", "indoor"):
+        return jsonify({"error": "target must be 'front' or 'indoor'"}), 400
+    return _arduino_call(sensor_client.speaker_test, target)
+
+
 @frontend_bp.route("/sensors", methods=["GET"])
 def get_sensors():
     return _arduino_call(sensor_client.get_sensors)
