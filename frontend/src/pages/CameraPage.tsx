@@ -37,14 +37,20 @@ export function CameraPage() {
           } else if (status.event_type === "stranger_alert") {
             setRecognitionNotice(
               status.event_message ||
-                "ALERT - Stranger detected continuously for 5 minutes",
+                "ALERT - Stranger detected on scan 5",
             );
             store.addEvent({
               timestamp: new Date().toISOString(),
-              type: "door",
-              value: 0,
-              action: "Stranger alert: saved images to database/Strangers",
+              type: "buzzer",
+              value: status.stranger_scan_count ?? 5,
+              action:
+                status.event_message ||
+                "Stranger alert: speaker triggered on scan 5",
             });
+          }
+
+          if (status.classification === "stranger") {
+            store.setDoorState(false);
           }
         })
         .catch((error) => console.error("Failed to load recognition status", error));

@@ -2,7 +2,12 @@ from flask import Flask, render_template, request, jsonify, Response
 from deepface import DeepFace
 import os
 import shutil
-from urllib.parse import urlparse, urljoin
+import math
+import json
+import re
+import threading
+import time
+from urllib.parse import urlencode, urlparse, urljoin
 import urllib.request
 from werkzeug.utils import secure_filename
 import requests
@@ -12,6 +17,69 @@ import pandas as pd  # add this at the top of app.py if not already
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 connected_devices = {}
+sensor_request_lock = threading.Lock()
+sensor_cache = {"value": None, "expires_at": 0.0}
+
+
+def get_sensor_base_url():
+    device = connected_devices.get("sensor")
+    if not device:
+        return None
+    return device["sensor_url"].removesuffix("/api/sensors")
+
+
+def normalize_json_numbers(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: normalize_json_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [normalize_json_numbers(item) for item in value]
+    return value
+
+
+def proxy_sensor(endpoint, cache_seconds=0):
+    base_url = get_sensor_base_url()
+    if not base_url:
+        return jsonify({
+            "error": "arduino_not_registered",
+            "message": "Sensor node has not registered yet.",
+        }), 503
+
+    now = time.monotonic()
+    if cache_seconds and sensor_cache["expires_at"] > now:
+        return jsonify(sensor_cache["value"])
+
+    if not sensor_request_lock.acquire(timeout=5):
+        if cache_seconds and sensor_cache["value"] is not None:
+            return jsonify(sensor_cache["value"])
+        return jsonify({
+            "error": "arduino_busy",
+            "message": "Sensor node is busy processing another request.",
+        }), 503
+
+    url = f"{base_url}{endpoint}"
+    try:
+        now = time.monotonic()
+        if cache_seconds and sensor_cache["expires_at"] > now:
+            return jsonify(sensor_cache["value"])
+
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        # Older sensor firmware emitted bare `nan`, which is not valid JSON.
+        payload = re.sub(r"\bnan\b", "null", response.text, flags=re.IGNORECASE)
+        data = normalize_json_numbers(json.loads(payload))
+        if cache_seconds:
+            sensor_cache["value"] = data
+            sensor_cache["expires_at"] = time.monotonic() + cache_seconds
+        return jsonify(data)
+    except requests.RequestException as e:
+        return jsonify({
+            "error": "arduino_unreachable",
+            "message": f"Cannot reach sensor node at {url}: {e}",
+        }), 502
+    finally:
+        sensor_request_lock.release()
 
 
 def build_esp32_url_candidates(camera_url: str):
@@ -22,7 +90,7 @@ def build_esp32_url_candidates(camera_url: str):
     if not parsed.path or parsed.path == '/':
         candidates.extend([
             urljoin(base_url, '/capture'),
-            urljoin(base_url, '/jpg'),
+urljoin(base_url, '/jpg'),
             urljoin(base_url, '/jpeg'),
             urljoin(base_url, '/stream'),
             urljoin(base_url, '/video'),
@@ -94,7 +162,7 @@ def fetch_esp32_image(url, timeout=30):
             raise Exception("Empty image response from ESP32 camera")
 
         if image_data.endswith(b"\xff\xd9"):
-            return bytes(image_data)
+return bytes(image_data)
 
         print(f"[ESP32] Warning: collected {len(image_data)} bytes without JPEG end marker")
         return bytes(image_data)
@@ -153,6 +221,130 @@ def register_device():
         }), 500
 
 
+@app.route("/api/arduino/register/sensor", methods=["POST"])
+def register_sensor():
+    data = request.get_json(silent=True) or {}
+    ip = data.get("ip", "").strip()
+
+    if not ip:
+        return jsonify({"error": "Missing or empty 'ip' field"}), 400
+
+    base_url = f"http://{ip}"
+    connected_devices["sensor"] = {
+        "stream_url": None,
+        "capture_url": None,
+        "sensor_url": f"{base_url}/api/sensors",
+        "door_url": f"{base_url}/api/door",
+    }
+
+    print(f"\n=== SENSOR REGISTERED: {base_url} ===")
+    return jsonify({
+        "success": True,
+        "device_id": "sensor",
+        "device": connected_devices["sensor"],
+    })
+
+
+@app.route("/api/arduino/register/camera", methods=["POST"])
+def register_camera():
+    data = request.get_json(silent=True) or {}
+    ip = data.get("ip", "").strip()
+
+    if not ip:
+        return jsonify({"error": "Missing or empty 'ip' field"}), 400
+
+    base_url = f"http://{ip}"
+    connected_devices["camera"] = {
+        "stream_url": f"{base_url}:81/stream",
+        "capture_url": f"{base_url}/capture",
+        "sensor_url": None,
+        "door_url": None,
+    }
+
+    print(f"\n=== CAMERA REGISTERED: {base_url} ===")
+    return jsonify({
+        "success": True,
+        "device_id": "camera",
+        "device": connected_devices["camera"],
+    })
+@app.route("/api/arduino/status", methods=["GET"])
+def arduino_status():
+    sensor = connected_devices.get("sensor")
+    camera = connected_devices.get("camera")
+    return jsonify({
+        "sensor_node": {
+            "url": get_sensor_base_url(),
+            "device": sensor,
+            "connected": sensor is not None,
+        },
+        "camera_node": {
+            "url": camera["stream_url"] if camera else None,
+            "stream_url": camera["stream_url"] if camera else None,
+            "capture_url": camera["capture_url"] if camera else None,
+            "device": camera,
+            "connected": camera is not None,
+        },
+    })
+
+
+@app.route("/api/sensors", methods=["GET"])
+def get_sensor_values():
+    return proxy_sensor("/api/sensors", cache_seconds=1)
+
+
+@app.route("/api/devices", methods=["GET"])
+def get_sensor_devices():
+    return proxy_sensor("/api/devices")
+
+
+@app.route("/api/control/light/<room>/<action>", methods=["POST"])
+def control_light(room, action):
+    if room not in {"wc", "kitchen", "bedroom"}:
+        return jsonify({"error": "Invalid room"}), 400
+    if action not in {"on", "off"}:
+        return jsonify({"error": "Invalid light action"}), 400
+    return proxy_sensor(f"/api/light/{room}/{action}")
+
+
+@app.route("/api/control/door/<action>", methods=["POST"])
+def control_door(action):
+    if action not in {"open", "close"}:
+        return jsonify({"error": "Invalid door action"}), 400
+    return proxy_sensor(f"/api/door/{action}")
+
+
+@app.route("/api/speaker/settings", methods=["GET", "PUT"])
+def speaker_settings():
+    if request.method == "GET":
+        return proxy_sensor("/api/speaker/settings")
+
+    data = request.get_json(silent=True) or {}
+    enabled = data.get("enabled")
+
+    try:
+        gas_threshold = int(data["gasThreshold"])
+        temperature_threshold = float(data["temperatureThreshold"])
+        humidity_threshold = float(data["humidityThreshold"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "Invalid speaker settings"}), 400
+
+    if (
+        not isinstance(enabled, bool)
+        or not 0 <= gas_threshold <= 4095
+        or not 0 < temperature_threshold <= 100
+        or not 0 < humidity_threshold <= 100
+    ):
+        return jsonify({"error": "Speaker settings are outside the allowed range"}), 400
+
+    query = urlencode({
+        "enabled": str(enabled).lower(),
+        "gas": gas_threshold,
+        "temperature": temperature_threshold,
+        "humidity": humidity_threshold,
+    })
+    return proxy_sensor(f"/api/speaker/settings/update?{query}")
+
+
 @app.route("/devices", methods=["GET"])
 def get_devices():
 
@@ -167,8 +359,6 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 os.makedirs(DB_PATH, exist_ok=True)
 os.makedirs(TEMP_PATH, exist_ok=True)
-
-
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -250,7 +440,7 @@ def verify_face():
         if best_match:
             return jsonify({"match": True, "best_match": best_match})
         else:
-            return jsonify({"match": False})
+return jsonify({"match": False})
 
     except Exception as e:
         print("Verification error:", e)
@@ -344,7 +534,7 @@ def get_faces():
         return jsonify({"faces": sorted(faces)})
 
     except Exception as e:
-        return jsonify({"faces": [], "error": str(e)})
+return jsonify({"faces": [], "error": str(e)})
 
 
 @app.route("/api/stats", methods=["GET"])
@@ -427,7 +617,7 @@ def esp32_test():
                 "message": "Timeout",
             })
         except requests.exceptions.ConnectionError as e:
-            results.append({
+results.append({
                 "url": candidate,
                 "status_code": None,
                 "content_type": None,
@@ -515,7 +705,7 @@ def esp32_stream():
     try:
 
         response = requests.get(
-            camera_url,
+camera_url,
             stream=True
         )
 
@@ -547,5 +737,3 @@ def get_camera_url(device_id):
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5001)
-    
-

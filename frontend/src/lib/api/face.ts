@@ -1,5 +1,15 @@
 // lib/api/face.ts
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+function getApiBase() {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:5001`;
+  }
+
+  return "http://localhost:5001";
+}
 
 export interface VerificationResult {
   verified: boolean;
@@ -16,6 +26,7 @@ export interface RecognitionStatus {
   confidence: number | null;
   image_path: string | null;
   stranger_duration_seconds: number;
+  stranger_scan_count: number;
   stranger_alert: boolean;
   event_id: number;
   event_type: "host" | "stranger_alert" | null;
@@ -30,7 +41,7 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("image", imageFile);
 
-    const res = await fetch(`${API_BASE}/api/verify-face`, {
+    const res = await fetch(`${getApiBase()}/api/verify-face`, {
       method: "POST",
       body: formData,
     });
@@ -75,7 +86,7 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("image", imageFile);
-    const res = await fetch(`${API_BASE}/api/add-face`, {
+    const res = await fetch(`${getApiBase()}/api/add-face`, {
       method: "POST",
       body: formData,
     });
@@ -96,23 +107,32 @@ export const faceApi = {
     const formData = new FormData();
     formData.append("image", imageFile);
     formData.append("name", name);
-    const res = await fetch(`${API_BASE}/api/add-host-face`, {
+    const res = await fetch(`${getApiBase()}/api/add-host-face`, {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Add host face failed");
+    if (!res.ok) {
+      let message = "Add host face failed";
+      try {
+        const data = await res.json();
+        message = data.error || data.message || message;
+      } catch {
+        message = await res.text();
+      }
+      throw new Error(message);
+    }
     return res.json();
   },
 
   async getFaces(): Promise<{ faces: string[] }> {
-    const res = await fetch(`${API_BASE}/api/get-faces`);
+    const res = await fetch(`${getApiBase()}/api/get-faces`);
     if (!res.ok) throw new Error("Failed to load faces");
     return res.json();
   },
 
   async fetchESP32Snapshot(cameraUrl: string): Promise<File> {
     const res = await fetch(
-      `${API_BASE}/api/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
+      `${getApiBase()}/api/esp32/snapshot?camera_url=${encodeURIComponent(cameraUrl)}`,
     );
     if (!res.ok) {
       let errorText = res.statusText;
@@ -129,7 +149,7 @@ export const faceApi = {
   },
 
   async deleteFace(name: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/api/delete-face`, {
+    const res = await fetch(`${getApiBase()}/api/delete-face`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -139,13 +159,13 @@ export const faceApi = {
   },
 
   async getRecognitionStatus(): Promise<RecognitionStatus> {
-    const res = await fetch(`${API_BASE}/api/camera/recognition-status`);
+    const res = await fetch(`${getApiBase()}/api/camera/recognition-status`);
     if (!res.ok) throw new Error("Failed to load recognition status");
     return res.json();
   },
 
   async startRecognition(): Promise<{ success: boolean; started: boolean }> {
-    const res = await fetch(`${API_BASE}/api/camera/recognition/start`, {
+    const res = await fetch(`${getApiBase()}/api/camera/recognition/start`, {
       method: "POST",
     });
     if (!res.ok) throw new Error("Failed to start recognition");
@@ -153,7 +173,7 @@ export const faceApi = {
   },
 
   async stopRecognition(): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/api/camera/recognition/stop`, {
+    const res = await fetch(`${getApiBase()}/api/camera/recognition/stop`, {
       method: "POST",
     });
     if (!res.ok) throw new Error("Failed to stop recognition");

@@ -52,14 +52,29 @@ export function FaceIdPage() {
       setSelectedFile(null);
       if (fileRef.current) fileRef.current.value = "";
       setMessage(`Da luu khuon mat Host '${name}' vao database/Hosts.`);
-    } catch {
-      setMessage("Khong the luu khuon mat Host. Kiem tra backend Face ID.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Khong the luu khuon mat Host. Kiem tra backend Face ID.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const startWebcam = async () => {
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    if (!window.isSecureContext && !isLocalhost) {
+      setMessage(
+        "Trinh duyet chan camera khi mo bang IP HTTP. Hay mo frontend bang http://localhost:3000 tren chinh laptop nay.",
+      );
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
@@ -67,8 +82,12 @@ export function FaceIdPage() {
       setWebcamStream(stream);
       setWebcamActive(true);
       setMessage(null);
-    } catch {
-      setMessage("Khong the mo camera laptop. Kiem tra quyen truy cap camera.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Khong the mo camera laptop: ${error.message}`
+          : "Khong the mo camera laptop. Kiem tra quyen truy cap camera.",
+      );
     }
   };
 
@@ -102,6 +121,7 @@ export function FaceIdPage() {
     canvas.toBlob(async (blob) => {
       try {
         if (!blob) throw new Error("No image data");
+        setMessage("Da chup anh thanh cong. Dang luu vao database/Hosts...");
         const file = new File([blob], "host-webcam.jpg", { type: "image/jpeg" });
         await faceApi.addHostFace(file, name);
         store.addEvent({
@@ -111,8 +131,12 @@ export function FaceIdPage() {
           action: `Captured Host face '${name}' to Face ID dataset`,
         });
         setMessage(`Da chup va luu Host '${name}' vao database/Hosts.`);
-      } catch {
-        setMessage("Khong the luu anh Host tu camera laptop.");
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Khong the luu anh Host tu camera laptop.",
+        );
       } finally {
         setLoading(false);
       }
@@ -124,13 +148,14 @@ export function FaceIdPage() {
       <div className="rounded-xl border border-border bg-card p-8">
         <h2 className="text-2xl font-bold">Them Host Face ID</h2>
         <p className="mt-2 text-lg text-muted-foreground">
-          Anh se duoc luu vao dataset faces/Hosts de nhan dien chu nha.
+          Nhap ten bat buoc, roi upload anh hoac chup bang camera may tinh.
+          Anh hop le se duoc luu vao database/Hosts.
         </p>
         <div className="mt-8 grid gap-4">
           <Input
             value={hostName}
             onChange={(event) => setHostName(event.target.value)}
-            placeholder="Ten Host"
+            placeholder="Ten Host bat buoc"
             className="h-12"
           />
           {webcamActive && (
@@ -165,7 +190,7 @@ export function FaceIdPage() {
               ) : (
                 <Camera className="mr-2 h-5 w-5" />
               )}
-              Chup va luu Host
+              Chup mat va luu vao Hosts
             </Button>
           </div>
           <button
@@ -175,7 +200,7 @@ export function FaceIdPage() {
           >
             <Upload className="mx-auto mb-3 h-10 w-10 text-primary" />
             <p className="font-semibold">
-              {selectedFile ? selectedFile.name : "Chon anh khuon mat"}
+              {selectedFile ? selectedFile.name : "Upload anh khuon mat Host"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">JPG hoac PNG</p>
           </button>
@@ -196,7 +221,7 @@ export function FaceIdPage() {
             ) : (
               <Plus className="mr-2 h-5 w-5" />
             )}
-            Luu Host vao dataset
+            Luu Host vao database/Hosts
           </Button>
           {message && (
             <p className="rounded-xl bg-secondary p-4 text-muted-foreground">

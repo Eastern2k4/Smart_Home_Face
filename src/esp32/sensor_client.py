@@ -73,10 +73,10 @@ class SensorNodeClient:
     # ── actuators ─────────────────────────────────────────────────────────
 
     def door_open(self):
-        return self._request("/api/door/open")
+        return self._request("/api/door/open", timeout=12)
 
     def door_close(self):
-        return self._request("/api/door/close")
+        return self._request("/api/door/close", timeout=12)
 
     def light_wc(self, on: bool):
         return self._request(f"/api/light/wc/{'on' if on else 'off'}")
@@ -86,6 +86,9 @@ class SensorNodeClient:
 
     def light_bedroom(self, on: bool):
         return self._request(f"/api/light/bedroom/{'on' if on else 'off'}")
+
+    def speaker_alert(self):
+        return self._request("/api/speaker/alert")
 
     # ── sensors ───────────────────────────────────────────────────────────
 

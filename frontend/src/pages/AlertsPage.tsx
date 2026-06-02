@@ -1,9 +1,41 @@
 // src/pages/AlertsPage.tsx
 import { useStore } from "@/lib/store";
 import { Switch } from "@/components/ui/switch";
+import { faceApi } from "@/lib/api/face";
+import { useEffect, useRef } from "react";
 
 export function AlertsPage() {
   const store = useStore();
+  const lastEventRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const fetchRecognitionStatus = () => {
+      faceApi
+        .getRecognitionStatus()
+        .then((status) => {
+          if (!status.event_id || status.event_id === lastEventRef.current) return;
+          lastEventRef.current = status.event_id;
+
+          if (status.event_type === "stranger_alert") {
+            store.addEvent({
+              timestamp: new Date().toISOString(),
+              type: "buzzer",
+              value: status.stranger_scan_count ?? 5,
+              action:
+                status.event_message ||
+                "ALERT - Stranger detected on scan 5",
+            });
+          }
+        })
+        .catch((error) =>
+          console.error("Failed to load recognition alert status", error),
+        );
+    };
+
+    fetchRecognitionStatus();
+    const interval = window.setInterval(fetchRecognitionStatus, 3000);
+    return () => window.clearInterval(interval);
+  }, [store]);
 
   return (
     <div className="space-y-8">

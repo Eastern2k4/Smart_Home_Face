@@ -1,8 +1,10 @@
 // src/pages/SensorsPage.tsx
 import { StatCard } from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import { sensorApi } from "@/lib/api/sensors";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useStore } from "@/lib/store";
-import { Droplets, Gauge, Thermometer } from "lucide-react";
+import { DoorClosed, DoorOpen, Droplets, Gauge, Thermometer } from "lucide-react";
 import { useMemo } from "react";
 import {
   CartesianGrid,
@@ -69,6 +71,39 @@ export function SensorsPage() {
           unit={store.sensors.kitchen.distance === -1 ? undefined : "cm"}
           icon={Gauge}
         />
+      </div>
+      <div className="rounded-xl border border-border bg-card p-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">Dieu khien cua</h2>
+            <p className="mt-2 text-lg text-muted-foreground">
+              {store.doorOpen ? "Cua dang mo" : "Cua dang dong"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              className="h-12 px-6"
+              onClick={() =>
+                sensorApi.setDoor(true).then(() => store.setDoorState(true))
+              }
+              disabled={store.doorOpen}
+            >
+              <DoorOpen className="mr-2 h-5 w-5" />
+              Mo cua
+            </Button>
+            <Button
+              className="h-12 px-6"
+              variant="outline"
+              onClick={() =>
+                sensorApi.setDoor(false).then(() => store.setDoorState(false))
+              }
+              disabled={!store.doorOpen}
+            >
+              <DoorClosed className="mr-2 h-5 w-5" />
+              Dong cua
+            </Button>
+          </div>
+        </div>
       </div>
       <div className="rounded-xl border border-border bg-card p-8">
         <div className="mb-8 flex items-center justify-between">
