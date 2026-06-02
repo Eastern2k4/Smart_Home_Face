@@ -8,6 +8,8 @@ from datetime import datetime
 from src.config import (
     CAMERA_CAPTURE_INTERVAL_SECONDS,
     DOOR_CLOSE_STABLE_FRAMES,
+    FACE_CONFIDENCE_THRESHOLD,
+    HOST_DOOR_HOLD_SECONDS,
     STRANGER_ALERT_FRAMES,
     STRANGER_ALERT_SECONDS,
 )
@@ -32,6 +34,7 @@ _stop_event = threading.Event()
 _stranger_started_at = None
 _last_stranger_saved_at = None
 _last_commanded_door_open = None
+_last_host_seen_at = None
 _non_host_frames = 0
 _stranger_scan_count = 0
 _status = {
@@ -132,20 +135,34 @@ def _command_door(open_door):
         return {"success": True, "skipped": True}
 
     result = _open_door() if open_door else _close_door()
-    if result.get("success", False):
+
+    # Cập nhật trạng thái nếu ESP32 không trả về lỗi
+    if isinstance(result, dict) and "error" not in result:
         _last_commanded_door_open = open_door
     return result
 
 
 def _mark_host_seen():
-    global _non_host_frames, _stranger_scan_count
+    global _last_host_seen_at, _non_host_frames, _stranger_scan_count
+    _last_host_seen_at = time.time()
     _non_host_frames = 0
     _stranger_scan_count = 0
     return _command_door(True)
 
 
-def _mark_non_host_seen():
+def _host_door_hold_active():
+    return (
+        _last_commanded_door_open is True
+        and _last_host_seen_at is not None
+        and time.time() - _last_host_seen_at < HOST_DOOR_HOLD_SECONDS
+    )
+
+
+def _mark_non_host_seen(allow_host_hold=False):
     global _non_host_frames
+    if allow_host_hold and _host_door_hold_active():
+        return {"success": True, "skipped": True, "reason": "host_door_hold_active"}
+
     _non_host_frames += 1
     if _non_host_frames < DOOR_CLOSE_STABLE_FRAMES:
         return {"success": True, "skipped": True, "reason": "waiting_for_stable_non_host"}
@@ -170,11 +187,12 @@ def _handle_stranger(image_path):
 
     duration = now - _stranger_started_at
     should_alert = _stranger_scan_count >= STRANGER_ALERT_FRAMES
-    saved_path = None
+
+    # Luôn di chuyển ảnh từ thư mục Temp sang Stranger ngay khi nhận là người lạ
+    saved_path = move_temp_capture_to_stranger(image_path)
 
     if _stranger_scan_count == STRANGER_ALERT_FRAMES:
         _trigger_speaker_alert()
-        saved_path = move_temp_capture_to_stranger(image_path)
         _last_stranger_saved_at = now
         _set_recognition_event(
             "stranger_alert",
@@ -184,7 +202,6 @@ def _handle_stranger(image_path):
         _last_stranger_saved_at is None
         or now - _last_stranger_saved_at >= STRANGER_ALERT_SECONDS
     ):
-        saved_path = move_temp_capture_to_stranger(image_path)
         _last_stranger_saved_at = now
 
     _set_status(
@@ -209,9 +226,9 @@ def _process_capture(image_data):
 
         if not has_face(probe_path):
             _reset_stranger_tracking()
-            _mark_non_host_seen()
+            door_result = _mark_non_host_seen(allow_host_hold=True)
             _set_status(
-                door_allowed=False,
+                door_allowed=bool(door_result.get("reason") == "host_door_hold_active"),
                 classification="no_face",
                 identity=None,
                 confidence=None,
@@ -235,40 +252,47 @@ def _process_capture(image_data):
         match = verify_against_database(image_path, allowed_identities={HOST_IDENTITY})
     except FaceNotDetected:
         _reset_stranger_tracking()
-        _mark_non_host_seen()
+        door_result = _mark_non_host_seen(allow_host_hold=True)
         _set_status(
-            door_allowed=False,
+            door_allowed=bool(door_result.get("reason") == "host_door_hold_active"),
             classification="no_face",
             identity=None,
             confidence=None,
-            image_path=image_path,
+            image_path=None,
             stranger_duration_seconds=0,
             stranger_scan_count=0,
             stranger_alert=False,
             error=None,
         )
+        # Xóa file trong Temp vì phát hiện là no_face ở bước verify
+        if image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except OSError:
+                pass
         return
 
     if match:
         confidence = _confidence_from_match(match)
-        _reset_stranger_tracking()
-        _mark_host_seen()
-        _set_recognition_event(
-            "host",
-            f"TRUE - Host recognized ({confidence:.1f}%)",
-        )
-        _set_status(
-            door_allowed=True,
-            classification="host",
-            identity=HOST_IDENTITY,
-            confidence=round(confidence, 1),
-            image_path=image_path,
-            stranger_duration_seconds=0,
-            stranger_scan_count=0,
-            stranger_alert=False,
-            error=None,
-        )
-        return
+        if confidence > FACE_CONFIDENCE_THRESHOLD:
+            _reset_stranger_tracking()
+            _mark_host_seen()
+            _set_recognition_event(
+                "host",
+                f"TRUE - Host recognized ({confidence:.1f}%)",
+            )
+            _set_status(
+                door_allowed=True,
+                classification="host",
+                identity=HOST_IDENTITY,
+                confidence=round(confidence, 1),
+                image_path=image_path,
+                stranger_duration_seconds=0,
+                stranger_scan_count=0,
+                stranger_alert=False,
+                error=None,
+            )
+            return
 
     _handle_stranger(image_path)
 

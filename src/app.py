@@ -4,6 +4,11 @@ app.py  –  Flask application factory with structured logging.
 
 import logging
 import sys
+import os
+
+# Thêm thư mục gốc của project vào sys.path để Python có thể import từ "src."
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask
 from src.api.arduino import arduino_bp
 from src.api.frontend import frontend_bp

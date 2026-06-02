@@ -90,6 +90,30 @@ class SensorNodeClient:
     def speaker_alert(self):
         return self._request("/api/speaker/alert")
 
+    def speaker_settings(self):
+        return self._request("/api/speaker/settings")
+
+    def update_speaker_audio(
+        self,
+        front_volume: int,
+        indoor_volume: int,
+        frequency: int,
+        duration: int,
+    ):
+        return self._request(
+            "/api/speaker/audio/update"
+            f"?frontVolume={front_volume}"
+            f"&indoorVolume={indoor_volume}"
+            f"&frequency={frequency}"
+            f"&duration={duration}"
+        )
+
+    def set_speaker_volume(self, speaker_id: int, volume: int):
+        return self._request(f"/api/speaker/volume?speakerId={speaker_id}&volume={volume}", method="POST")
+
+    def speaker_test(self, target: str):
+        return self._request(f"/api/speaker/test?target={target}", timeout=35)
+
     # ── sensors ───────────────────────────────────────────────────────────
 
     def get_sensors(self):
