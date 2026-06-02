@@ -7,6 +7,10 @@ dist/
 build/
 .DS_Store
 .env
+config/app.local.json
+config/app.generated.json
+CameraWebServer/config.generated.h
+ESP32_SensorNode/config.generated.h
 *.db
 temp/
 datasets/
@@ -14,3 +18,4 @@ datasets/
 *.jpeg
 *.png
 *.gif
+antigravitycli

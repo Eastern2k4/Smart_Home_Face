@@ -5,11 +5,11 @@ from .database import allowed_file
 
 
 class FaceNotDetected(Exception):
-    """Raised when DeepFace cannot detect a face in the input image."""
+    """Raised when no face can be detected in a query image."""
 
 
 def has_face(image_path):
-    """Return True only when DeepFace can detect a face in the image."""
+    """Return True when DeepFace can detect a face in the input image."""
     try:
         DeepFace.represent(
             img_path=image_path,
@@ -21,7 +21,7 @@ def has_face(image_path):
     except Exception as e:
         if "Face could not be detected" in str(e):
             return False
-        raise
+        return False
 
 
 def verify_against_database(image_path, allowed_identities=None):
@@ -29,16 +29,18 @@ def verify_against_database(image_path, allowed_identities=None):
     Compare a temporary image against all faces in DB.
     Returns best match dict or None.
     """
+    if not os.path.exists(DB_PATH):
+        return None
+
     best = None
     min_distance = 1.0
     attempted = 0
     face_detection_errors = 0
 
-    if not os.path.exists(DB_PATH):
-        return None
-
     for person in os.listdir(DB_PATH):
-        if allowed_identities is not None and person not in allowed_identities:
+        if person.startswith("."):
+            continue
+        if allowed_identities and person not in allowed_identities:
             continue
         person_path = os.path.join(DB_PATH, person)
         if not os.path.isdir(person_path):

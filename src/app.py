@@ -4,15 +4,15 @@ app.py  –  Flask application factory with structured logging.
 
 import logging
 import sys
-import os
-
-# Thêm thư mục gốc của project vào sys.path để Python có thể import từ "src."
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from flask import Flask
-from src.api.arduino import arduino_bp
-from src.api.frontend import frontend_bp
+from src.api.arduino import create_arduino_blueprint
+from src.api.camera import create_camera_blueprint
+from src.api.devices import create_devices_blueprint
+from src.api.face import create_face_blueprint
+from src.config import BACKEND_PORT
+from src.dependencies.services import create_service_container
 from src.face_recognition.database import ensure_database_dirs
+from src.firmware_config import generate_firmware_config
 
 
 def create_app():
@@ -29,10 +29,31 @@ def create_app():
 
     app = Flask(__name__)
     ensure_database_dirs()
+    generate_firmware_config(verbose=False)
+
+    # ── services ────────────────────────────────────────────────────────
+    services = create_service_container()
 
     # ── blueprints ───────────────────────────────────────────────────────
-    app.register_blueprint(arduino_bp, url_prefix="/api/arduino")
-    app.register_blueprint(frontend_bp, url_prefix="/api")
+    app.register_blueprint(
+        create_arduino_blueprint(
+            services.device_registry,
+            services.camera_recognition,
+        ),
+        url_prefix="/api/arduino",
+    )
+    app.register_blueprint(
+        create_face_blueprint(services.face_verification, services.device_control),
+        url_prefix="/api",
+    )
+    app.register_blueprint(
+        create_devices_blueprint(services.device_control),
+        url_prefix="/api",
+    )
+    app.register_blueprint(
+        create_camera_blueprint(services.camera_recognition),
+        url_prefix="/api",
+    )
 
     # ── CORS ─────────────────────────────────────────────────────────────
     @app.after_request
@@ -52,4 +73,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(debug=True, host="0.0.0.0", port=BACKEND_PORT)

@@ -1,9 +1,12 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// WiFi credentials (must be filled)
-extern const char* WIFI_SSID;
-extern const char* WIFI_PASSWORD;
+// WiFi/backend configuration is generated from config/app*.json.
+#if __has_include("config.generated.h")
+#include "config.generated.h"
+#else
+#include "config.generated.example.h"
+#endif
 
 // Camera defaults
 #define DEFAULT_FRAME_SIZE     FRAMESIZE_VGA   // 640x480
@@ -14,10 +17,6 @@ extern const char* WIFI_PASSWORD;
 
 // LED (GPIO is defined in camera_pins.h)
 #define CONFIG_LED_MAX_INTENSITY 255
-
-// HTTP server ports
-#define HTTP_PORT             80
-#define STREAM_PORT           81
 
 // Stream boundary (must match client expectation)
 #define STREAM_BOUNDARY       "123456789000000000000987654321"

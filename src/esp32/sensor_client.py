@@ -3,7 +3,7 @@ sensor_client.py  –  HTTP client for the Sensor Arduino node.
 
 Key improvements over the old version:
   • Fixed the self._base_url / self.base_url naming bug (crashed at runtime).
-  • Reads the registered URL from state at call-time, not at import-time.
+  • Reads the registered URL from DeviceRegistryService at call-time.
   • Raises ArduinoNotRegistered when no IP has been registered yet.
   • Raises ArduinoUnreachable (with full context) when the request times out
     or the node returns a non-2xx response.
@@ -13,30 +13,25 @@ Key improvements over the old version:
 
 import logging
 import requests
-import src.state as state
+from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
 logger = logging.getLogger("sensor_client")
 
 DEFAULT_TIMEOUT = 5  # seconds
 
 
-class ArduinoNotRegistered(Exception):
-    """Raised when no Arduino has called /register yet."""
-
-
-class ArduinoUnreachable(Exception):
-    """Raised when the Arduino is registered but not responding."""
-
-
 class SensorNodeClient:
-    def __init__(self, base_url: str | None = None):
+    def __init__(self, base_url: str | None = None, registry=None):
         # Allow an explicit URL for testing; otherwise read from shared state.
         self._explicit_url = base_url
+        self._registry = registry
 
     # ── internal ──────────────────────────────────────────────────────────
 
     def _base_url(self) -> str:
-        url = self._explicit_url or state.sensor_node_url
+        url = self._explicit_url
+        if not url and self._registry:
+            url = self._registry.get_sensor_url()
         if not url:
             raise ArduinoNotRegistered(
                 "Sensor node has not registered yet. "
@@ -89,30 +84,6 @@ class SensorNodeClient:
 
     def speaker_alert(self):
         return self._request("/api/speaker/alert")
-
-    def speaker_settings(self):
-        return self._request("/api/speaker/settings")
-
-    def update_speaker_audio(
-        self,
-        front_volume: int,
-        indoor_volume: int,
-        frequency: int,
-        duration: int,
-    ):
-        return self._request(
-            "/api/speaker/audio/update"
-            f"?frontVolume={front_volume}"
-            f"&indoorVolume={indoor_volume}"
-            f"&frequency={frequency}"
-            f"&duration={duration}"
-        )
-
-    def set_speaker_volume(self, speaker_id: int, volume: int):
-        return self._request(f"/api/speaker/volume?speakerId={speaker_id}&volume={volume}", method="POST")
-
-    def speaker_test(self, target: str):
-        return self._request(f"/api/speaker/test?target={target}", timeout=35)
 
     # ── sensors ───────────────────────────────────────────────────────────
 

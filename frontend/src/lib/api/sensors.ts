@@ -60,9 +60,11 @@ export const sensorApi = {
     };
   },
 
-  // Placeholder for buzzer – can be added later if needed
   async triggerBuzzer(durationMs: number): Promise<void> {
-    console.warn("Buzzer not implemented");
+    const res = await fetch(`${getApiBase()}/api/speaker/alert`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to trigger speaker alert");
   },
   async muteBuzzer(): Promise<void> {
     console.warn("Buzzer not implemented");

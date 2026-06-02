@@ -3,49 +3,47 @@ import shutil
 from werkzeug.utils import secure_filename
 from src.config import (
     ALLOWED_EXTENSIONS,
-    DATABASE_PATH,
-    HOSTS_PATH,
+    DB_PATH,
+    HOST_IDENTITY,
     STRANGER_PATH,
     TEMP_MAX_IMAGES,
     TEMP_PATH,
 )
 
+__all__ = [
+    "HOST_IDENTITY",
+    "get_all_faces",
+    "add_face_image",
+    "add_host_face_image",
+    "delete_face",
+    "allowed_file",
+    "ensure_database_dirs",
+    "save_temp_capture",
+    "move_temp_capture_to_stranger",
+]
 
-HOST_IDENTITY = "Hosts"
-STRANGER_IDENTITY = "Strangers"
-TEMP_IDENTITY = "Temp"
-SYSTEM_FOLDERS = {STRANGER_IDENTITY, TEMP_IDENTITY}
+SYSTEM_FOLDERS = {"Strangers", "Temp"}
 
 
 def ensure_database_dirs():
-    """Create required folders under the project's database directory.
-
-    Called at application startup to ensure other modules can read/write
-    images without checking existence everywhere.
-    """
-    os.makedirs(DATABASE_PATH, exist_ok=True)
-    os.makedirs(HOSTS_PATH, exist_ok=True)
+    os.makedirs(DB_PATH, exist_ok=True)
+    os.makedirs(os.path.join(DB_PATH, HOST_IDENTITY), exist_ok=True)
     os.makedirs(STRANGER_PATH, exist_ok=True)
     os.makedirs(TEMP_PATH, exist_ok=True)
 
 
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
 def get_all_faces():
-    """Return list of unique person names (excluding internal folders)."""
+    """Return list of unique person names."""
     ensure_database_dirs()
     faces = set()
-    for root, _, files in os.walk(DATABASE_PATH):
+    for root, _, files in os.walk(DB_PATH):
         for file in files:
-            if not allowed_file(file):
-                continue
-            rel = os.path.relpath(os.path.join(root, file), DATABASE_PATH)
-            name = rel.split(os.sep)[0]
-            if name in SYSTEM_FOLDERS:
-                continue
-            faces.add(name)
+            if allowed_file(file):
+                rel = os.path.relpath(os.path.join(root, file), DB_PATH)
+                name = rel.split(os.sep)[0]
+                if name in SYSTEM_FOLDERS:
+                    continue
+                faces.add(name)
     return sorted(faces)
 
 
@@ -61,10 +59,10 @@ def next_image_path(folder_path, prefix):
 
 
 def add_face_image(name, image_file):
-    """Save uploaded image to person's folder and return saved path."""
+    """Save uploaded image to person's folder."""
     ensure_database_dirs()
     name_secure = secure_filename(name)
-    person_dir = os.path.join(DATABASE_PATH, name_secure)
+    person_dir = os.path.join(DB_PATH, name_secure)
     os.makedirs(person_dir, exist_ok=True)
     filepath = next_image_path(person_dir, name_secure)
     image_file.save(filepath)
@@ -72,22 +70,28 @@ def add_face_image(name, image_file):
 
 
 def add_host_face_image(image_file, name=None):
-    """Save an image into the Hosts folder (used for known hosts)."""
+    """Save an uploaded image to the canonical host folder."""
     ensure_database_dirs()
-    name_secure = secure_filename(name or HOST_IDENTITY) or HOST_IDENTITY
-    filepath = next_image_path(HOSTS_PATH, name_secure)
+    host_dir = os.path.join(DB_PATH, HOST_IDENTITY)
+    prefix = secure_filename(name or HOST_IDENTITY) or HOST_IDENTITY
+    filepath = next_image_path(host_dir, prefix)
     image_file.save(filepath)
     return filepath
 
 
-def save_bytes_to_folder(folder_path, prefix, image_data):
+def delete_face(name):
+    """Remove entire person folder."""
     ensure_database_dirs()
-    count = len([f for f in os.listdir(folder_path) if allowed_file(f)])
-    filename = secure_filename(f"{prefix}_{count}.jpg")
-    filepath = os.path.join(folder_path, filename)
-    with open(filepath, "wb") as f:
-        f.write(image_data)
-    return filepath
+    name_secure = secure_filename(name)
+    person_dir = os.path.join(DB_PATH, name_secure)
+    if os.path.exists(person_dir):
+        shutil.rmtree(person_dir)
+        return True
+    return False
+
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def _image_files_by_age(folder_path):
@@ -100,7 +104,7 @@ def _image_files_by_age(folder_path):
         if os.path.isfile(path):
             entries.append((path, os.path.getmtime(path)))
     entries.sort(key=lambda item: item[1])
-    return [p for p, _ in entries]
+    return [path for path, _ in entries]
 
 
 def prune_temp_images(max_images=TEMP_MAX_IMAGES):
@@ -119,32 +123,22 @@ def prune_temp_images(max_images=TEMP_MAX_IMAGES):
 
 
 def save_temp_capture(image_data):
-    path = save_bytes_to_folder(TEMP_PATH, "temp", image_data)
+    ensure_database_dirs()
+    filepath = next_image_path(TEMP_PATH, "temp")
+    with open(filepath, "wb") as image_file:
+        image_file.write(image_data)
     prune_temp_images()
-    return path
+    return filepath
 
 
 def move_temp_capture_to_stranger(temp_path):
     ensure_database_dirs()
     if not os.path.exists(temp_path):
         return None
-    count = len([f for f in os.listdir(STRANGER_PATH) if allowed_file(f)])
-    filename = secure_filename(f"stranger_{count}.jpg")
-    destination = os.path.join(STRANGER_PATH, filename)
+    destination = next_image_path(STRANGER_PATH, "stranger")
     shutil.copy2(temp_path, destination)
     try:
         os.remove(temp_path)
     except OSError:
         pass
     return destination
-
-
-def delete_face(name):
-    ensure_database_dirs()
-    name_secure = secure_filename(name)
-    person_dir = os.path.join(DATABASE_PATH, name_secure)
-    if os.path.exists(person_dir):
-        shutil.rmtree(person_dir)
-        return True
-    return False
-

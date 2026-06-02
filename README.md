@@ -47,19 +47,46 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. **[QUAN TRỌNG]** Sửa IP ESP32 trong CameraWebServer.ino
+### 4. **[QUAN TRỌNG]** Cấu hình backend và Wi-Fi
 
-Nếu sử dụng sketch ESP32 tự động gửi ảnh:
+Không sửa Wi-Fi hoặc backend IP trực tiếp trong file `.ino`.
+Tạo file local config từ file mẫu:
 
-**Tệp:** `CameraWebServer/CameraWebServer.ino` (dòng ~138)
-
-```cpp
-// TRƯỚC (sai):
-http.begin("http://10.136.25.165:5000/upload");
-
-// SAU (đúng - thay IP máy PC):
-http.begin("http://192.168.1.100:5000/upload");  // Đổi 192.168.1.100 thành IP PC của bạn
+```bash
+cp config/app.example.json config/app.local.json
 ```
+
+Sửa `config/app.local.json`:
+
+```json
+{
+  "backend": {
+    "host": "auto",
+    "port": 5001
+  },
+  "wifi": {
+    "ssid": "YOUR_WIFI",
+    "password": "YOUR_PASSWORD"
+  }
+}
+```
+
+Sau đó khởi động backend:
+
+```bash
+python -m src.app
+```
+
+Khi backend khởi động, `src.app` tự đọc IP LAN hiện tại của máy backend và ghi
+vào config generated của ESP32. Nếu máy có nhiều network interface, đặt IP cụ
+thể trong `config/app.local.json`.
+
+Lệnh này tạo:
+
+- `CameraWebServer/config.generated.h`
+- `ESP32_SensorNode/config.generated.h`
+
+Hai file generated này bị ignore bởi Git để không commit Wi-Fi/password.
 
 ### 5. Flash Code vào ESP32
 ```bash
@@ -68,31 +95,24 @@ http.begin("http://192.168.1.100:5000/upload");  // Đổi 192.168.1.100 thành 
 # Flash vào ESP32-CAM
 ```
 
-### 6. Cấu hình ESP32 Wi-Fi
-
-Trong `CameraWebServer/CameraWebServer.ino`, sửa thông tin Wi-Fi (dòng ~22):
-
-```cpp
-const char* ssid = "YOUR_SSID";         // Tên Wi-Fi
-const char* password = "YOUR_PASSWORD"; // Mật khẩu Wi-Fi
-```
-
 ## ▶️ Chạy Ứng Dụng
 
 ### 1. Khởi động Flask Server
 ```bash
-python app.py
+python -m src.app
 ```
 
 **Output:**
 ```
 WARNING: This is a development server. Do not use it in production deployments.
 Use a production WSGI server instead.
-* Running on http://0.0.0.0:5000
+* Running on http://0.0.0.0:5001
 ```
 
+`app.py` ở thư mục gốc là backend legacy. Backend chính hiện tại là `src/app.py`.
+
 ### 2. Mở Trình Duyệt
-- Truy cập: `http://localhost:5000`
+- Truy cập frontend Next.js và cấu hình backend URL là `http://localhost:5001`
 
 ### 3. Thêm Khuôn Mặt vào Database
 
@@ -121,7 +141,10 @@ Use a production WSGI server instead.
 
 ```
 Smart_Home_Face/
-├── app.py                    # Flask backend
+├── app.py                    # Legacy Flask backend
+├── src/                      # Modular Flask backend chính
+│   ├── app.py                # Entry point backend trên port 5001
+│   └── api/                  # API blueprints
 ├── requirements.txt          # Dependencies
 ├── README.md                 # File này
 ├── templates/
@@ -141,41 +164,42 @@ Smart_Home_Face/
 
 ## 🔧 API Endpoints
 
-### `/verify-face` (POST)
+### `/api/verify-face` (POST)
 Xác thực ảnh upload
 ```bash
-curl -X POST -F "image=@photo.jpg" http://localhost:5000/verify-face
+curl -X POST -F "image=@photo.jpg" http://localhost:5001/api/verify-face
 ```
 
-### `/add-face` (POST)
+### `/api/add-face` (POST)
 Thêm khuôn mặt mới
 ```bash
-curl -X POST -F "image=@photo.jpg" -F "name=John" http://localhost:5000/add-face
+curl -X POST -F "image=@photo.jpg" -F "name=John" http://localhost:5001/api/add-face
 ```
 
-### `/delete-face` (POST)
+### `/api/delete-face` (POST)
 Xóa khuôn mặt
 ```bash
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"name":"John"}' http://localhost:5000/delete-face
+  -d '{"name":"John"}' http://localhost:5001/api/delete-face
 ```
 
-### `/get-faces` (GET)
+### `/api/get-faces` (GET)
 Lấy danh sách khuôn mặt
 ```bash
-curl http://localhost:5000/get-faces
+curl http://localhost:5001/api/get-faces
 ```
 
-### `/esp32/snapshot` (GET)
+### `/api/esp32/snapshot` (GET)
 Lấy snapshot từ ESP32-CAM
 ```bash
-curl "http://localhost:5000/esp32/snapshot?camera_url=http://192.168.1.102/capture"
+curl "http://localhost:5001/api/esp32/snapshot?camera_url=http://192.168.1.102/capture"
 ```
 
-### `/upload` (POST)
-Nhận ảnh từ ESP32-CAM tự động gửi
+### `/api/arduino/register/sensor` (POST)
+ESP32 Sensor Node đăng ký IP với backend
 ```bash
-# ESP32 sẽ tự động POST ảnh JPEG
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"ip":"192.168.1.50"}' http://localhost:5001/api/arduino/register/sensor
 ```
 
 ## ⚙️ Những Phần Cần Sửa Khi Clone
@@ -185,8 +209,8 @@ Nhận ảnh từ ESP32-CAM tự động gửi
 | **IP PC** | `CameraWebServer/CameraWebServer.ino:138` | Sửa thành IP máy tính chạy Flask |
 | **SSID Wi-Fi** | `CameraWebServer/CameraWebServer.ino:22` | Tên Wi-Fi nhà bạn |
 | **Password Wi-Fi** | `CameraWebServer/CameraWebServer.ino:23` | Mật khẩu Wi-Fi |
-| **Port Flask** | `app.py:265` | Nếu port 5000 bị chiếm dụng |
-| **Host Flask** | `app.py:265` | Thay `0.0.0.0` nếu muốn kết nối từ device khác |
+| **Port Flask** | `src/app.py` | Nếu port 5001 bị chiếm dụng |
+| **Host Flask** | `src/app.py` | Thay `0.0.0.0` nếu muốn kết nối từ device khác |
 
 ## 🔍 Tìm IP ESP32
 
@@ -215,7 +239,7 @@ ifconfig
 ### Lỗi: `Connection refused`
 - ✅ Kiểm tra Flask server đang chạy
 - ✅ Kiểm tra IP ESP32 có đúng không
-- ✅ Kiểm tra firewall cho phép port 5000
+- ✅ Kiểm tra firewall cho phép port 5001
 
 ### Lỗi: `Face not detected`
 - ✅ Chụp ảnh rõ ràng, mặt không bị che
