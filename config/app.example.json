@@ -1,0 +1,25 @@
+{
+  "backend": {
+    "host": "auto",
+    "port": 5001
+  },
+  "wifi": {
+    "ssid": "YOUR_WIFI",
+    "password": "YOUR_PASSWORD"
+  },
+  "recognition": {
+    "camera_capture_interval_seconds": 2,
+    "stranger_alert_seconds": 30,
+    "stranger_alert_frames": 5,
+    "door_close_stable_frames": 2,
+    "temp_max_images": 100
+  },
+  "firmware": {
+    "register_interval_ms": 30000,
+    "sensor_http_port": 80,
+    "camera_http_port": 80,
+    "camera_stream_port": 81,
+    "speaker_alert_duration_ms": 5000,
+    "alarm_check_interval_ms": 2500
+  }
+}

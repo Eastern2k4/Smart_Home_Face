@@ -9,8 +9,10 @@ from src.api.arduino import create_arduino_blueprint
 from src.api.camera import create_camera_blueprint
 from src.api.devices import create_devices_blueprint
 from src.api.face import create_face_blueprint
+from src.config import BACKEND_PORT
 from src.dependencies.services import create_service_container
 from src.face_recognition.database import ensure_database_dirs
+from src.firmware_config import generate_firmware_config
 
 
 def create_app():
@@ -27,6 +29,7 @@ def create_app():
 
     app = Flask(__name__)
     ensure_database_dirs()
+    generate_firmware_config(verbose=False)
 
     # ── services ────────────────────────────────────────────────────────
     services = create_service_container()
@@ -70,4 +73,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(debug=True, host="0.0.0.0", port=BACKEND_PORT)

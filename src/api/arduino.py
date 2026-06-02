@@ -8,6 +8,8 @@ and exposes a /status endpoint so you can see what is connected.
 import logging
 from flask import Blueprint, request, jsonify
 
+from src.services.device_registry import DeviceRegistryService
+
 logger = logging.getLogger("arduino")
 
 
@@ -25,7 +27,10 @@ def _extract_ip(data: dict | None) -> str | None:
 # ─── registration endpoints ──────────────────────────────────────────────────
 
 
-def create_arduino_blueprint(device_registry_service, camera_recognition_service=None):
+def create_arduino_blueprint(
+    device_registry_service: DeviceRegistryService,
+    camera_recognition_service=None,
+):
     arduino_bp = Blueprint("arduino", __name__)
 
     @arduino_bp.route("/register/sensor", methods=["POST"])

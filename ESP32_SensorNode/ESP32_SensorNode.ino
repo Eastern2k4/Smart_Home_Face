@@ -5,51 +5,10 @@
 #include <esp_system.h>
 
 #include <HTTPClient.h>
-
-// ================= BACKEND REGISTRATION =================
-const char* backendHost = "192.168.1.X";   // Replace with your Flask server's IP address
-const int backendPort = 5001;
-const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
-unsigned long lastBackendRegisterMs = 0;
-
-// ================= WIFI CONFIG =================
-const char* ssid = "TRAM 247 STUDY CAFE & WORKSPACE";
-const char* password = "tramloveyou";
+#include "config.h"
 
 // ================= SERVER =================
-WebServer server(80);
-
-// ================= PIN CONFIG =================
-// Đèn
-#define LED_WC_PIN        18
-#define LED_KITCHEN_PIN   17   // TX2 = GPIO17
-#define LED_BEDROOM_PIN   16   // RX2 = GPIO16
-
-// Siêu âm phòng bếp
-#define TRIG_KITCHEN_PIN  5
-#define ECHO_KITCHEN_PIN  19
-
-// Siêu âm phòng WC
-#define TRIG_WC_PIN       21
-#define ECHO_WC_PIN       22
-
-// DHT
-#define DHT_LIVING_PIN    23
-#define DHT_BEDROOM_PIN   25
-#define DHT_TYPE          DHT11   // Nếu bạn dùng DHT22 thì đổi thành DHT22
-
-// Gas
-#define GAS_PIN           32
-
-// Servo
-#define SERVO_PIN         26
-
-// Speakers
-#define LOA_TRUOC         27
-#define LOA_KHACH         14
-#define LOA_NGU           13
-#define SPEAKER_ACTIVE_LEVEL   HIGH
-#define SPEAKER_INACTIVE_LEVEL LOW
+WebServer server(SENSOR_HTTP_PORT);
 
 // ================= OBJECTS =================
 DHT dhtLiving(DHT_LIVING_PIN, DHT_TYPE);
@@ -67,16 +26,12 @@ bool indoorAlarmEnabled = true;
 bool gasAlarmActive = false;
 bool temperatureAlarmActive = false;
 bool humidityAlarmActive = false;
-int gasAlarmThreshold = 500;
-float temperatureAlarmThreshold = 35.0;
-float humidityAlarmThreshold = 80.0;
-const int GAS_ALARM_HYSTERESIS = 50;
-const float TEMPERATURE_ALARM_HYSTERESIS = 1.0;
-const float HUMIDITY_ALARM_HYSTERESIS = 3.0;
+int gasAlarmThreshold = DEFAULT_GAS_ALARM_THRESHOLD;
+float temperatureAlarmThreshold = DEFAULT_TEMPERATURE_ALARM_THRESHOLD;
+float humidityAlarmThreshold = DEFAULT_HUMIDITY_ALARM_THRESHOLD;
 unsigned long lastAlarmCheckMs = 0;
-const unsigned long ALARM_CHECK_INTERVAL_MS = 2500;
 unsigned long frontDoorSpeakerAlertUntilMs = 0;
-const unsigned long SPEAKER_ALERT_DURATION_MS = 5000;
+unsigned long lastBackendRegisterMs = 0;
 
 void registerWithBackend() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -85,7 +40,7 @@ void registerWithBackend() {
     }
 
     HTTPClient http;
-    String url = "http://" + String(backendHost) + ":" + String(backendPort) + "/api/arduino/register/sensor";
+    String url = "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/sensor";
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
@@ -444,7 +399,7 @@ void setup() {
   forceAllSpeakersOff();
 
   // WiFi
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
 
   while (WiFi.status() != WL_CONNECTED) {

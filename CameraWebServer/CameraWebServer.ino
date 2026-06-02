@@ -5,12 +5,6 @@
 #include "http_server.h"
 #include <HTTPClient.h>
 
-// WiFi credentials (must match the extern in config.h)
-const char* WIFI_SSID = "TRAM 247 STUDY CAFE & WORKSPACE";
-const char* WIFI_PASSWORD = "tramloveyou";
-const char* BACKEND_HOST = "172.16.2.113";
-const int BACKEND_PORT = 5001;
-const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
 unsigned long lastBackendRegisterMs = 0;
 
 void registerCameraWithBackend() {

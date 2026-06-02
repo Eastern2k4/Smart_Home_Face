@@ -47,19 +47,46 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. **[QUAN TRỌNG]** Sửa IP ESP32 trong CameraWebServer.ino
+### 4. **[QUAN TRỌNG]** Cấu hình backend và Wi-Fi
 
-Nếu sử dụng sketch ESP32 tự động gửi ảnh:
+Không sửa Wi-Fi hoặc backend IP trực tiếp trong file `.ino`.
+Tạo file local config từ file mẫu:
 
-**Tệp:** `CameraWebServer/CameraWebServer.ino` (dòng ~138)
-
-```cpp
-// TRƯỚC (sai):
-http.begin("http://10.136.25.165:5000/upload");
-
-// SAU (đúng - thay IP máy PC):
-http.begin("http://192.168.1.100:5000/upload");  // Đổi 192.168.1.100 thành IP PC của bạn
+```bash
+cp config/app.example.json config/app.local.json
 ```
+
+Sửa `config/app.local.json`:
+
+```json
+{
+  "backend": {
+    "host": "auto",
+    "port": 5001
+  },
+  "wifi": {
+    "ssid": "YOUR_WIFI",
+    "password": "YOUR_PASSWORD"
+  }
+}
+```
+
+Sau đó khởi động backend:
+
+```bash
+python -m src.app
+```
+
+Khi backend khởi động, `src.app` tự đọc IP LAN hiện tại của máy backend và ghi
+vào config generated của ESP32. Nếu máy có nhiều network interface, đặt IP cụ
+thể trong `config/app.local.json`.
+
+Lệnh này tạo:
+
+- `CameraWebServer/config.generated.h`
+- `ESP32_SensorNode/config.generated.h`
+
+Hai file generated này bị ignore bởi Git để không commit Wi-Fi/password.
 
 ### 5. Flash Code vào ESP32
 ```bash
@@ -68,20 +95,11 @@ http.begin("http://192.168.1.100:5000/upload");  // Đổi 192.168.1.100 thành 
 # Flash vào ESP32-CAM
 ```
 
-### 6. Cấu hình ESP32 Wi-Fi
-
-Trong `CameraWebServer/CameraWebServer.ino`, sửa thông tin Wi-Fi (dòng ~22):
-
-```cpp
-const char* ssid = "YOUR_SSID";         // Tên Wi-Fi
-const char* password = "YOUR_PASSWORD"; // Mật khẩu Wi-Fi
-```
-
 ## ▶️ Chạy Ứng Dụng
 
 ### 1. Khởi động Flask Server
 ```bash
-python src/app.py
+python -m src.app
 ```
 
 **Output:**
