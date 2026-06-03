@@ -2,17 +2,17 @@
 
 Hệ thống nhận diện khuôn mặt tích hợp ESP32-CAM để mở cửa thông minh. Sử dụng DeepFace và OpenCV để xác thực khuôn mặt với độ chính xác cao.
 
-## 🎯 Tính năng
+##  Tính năng
 
-- ✅ Nhận diện khuôn mặt qua ảnh upload
-- ✅ Lấy snapshot từ ESP32-CAM qua mạng Wi-Fi
-- ✅ Dùng camera máy tính để capture và xác thực
-- ✅ Quản lý cơ sở dữ liệu khuôn mặt
-- ✅ Giao diện web đẹp và dễ sử dụng (Flask + Next.js Frontend)
-- ✅ API endpoint để ESP32-CAM gửi ảnh tự động
-- ✅ Điều khiển thiết bị smart home (đèn, cảm biến, servo)
+-  Nhận diện khuôn mặt qua ảnh upload
+-  Lấy snapshot từ ESP32-CAM qua mạng Wi-Fi
+-  Dùng camera máy tính để capture và xác thực
+-  Quản lý cơ sở dữ liệu khuôn mặt
+-  Giao diện web đẹp và dễ sử dụng (Flask + Next.js Frontend)
+-  API endpoint để ESP32-CAM gửi ảnh tự động
+-  Điều khiển thiết bị smart home (đèn, cảm biến, servo)
 
-## 📋 Yêu cầu
+##  Yêu cầu
 
 ### Phần cứng
 - **ESP32-CAM** (với camera OV2640)
@@ -173,7 +173,7 @@ For demos, prefer explicit LAN IP:
 }
 ```
 
-## 🚀 Cài đặt
+##  Cài đặt
 
 ### 1. Clone Repository
 ```bash
@@ -291,7 +291,7 @@ Use a production WSGI server instead.
 
 ### 3. Thêm Khuôn Mặt vào Database
 
-1. Nhấn nút **➕ Add New Face**
+1. Nhấn nút ** Add New Face**
 2. Nhập tên người
 3. Chọn ảnh khuôn mặt rõ ràng
 4. Nhấn **Add Face**
@@ -303,16 +303,16 @@ Use a production WSGI server instead.
 - Hệ thống sẽ kiểm tra và hiển thị kết quả
 
 #### **Tab Camera**
-- Nhấn **🎥 Start Camera**
-- Nhấn **📸 Capture & Verify** để chụp ảnh
+- Nhấn ** Start Camera**
+- Nhấn ** Capture & Verify** để chụp ảnh
 - Xem kết quả xác thực
 
 #### **Tab ESP32**
 - Nhập địa chỉ: `http://<ESP32_IP>/capture`
 - Ví dụ: `http://192.168.1.102/capture`
-- Nhấn **📡 Fetch ESP32 Snapshot**
+- Nhấn ** Fetch ESP32 Snapshot**
 
-## 📁 Cấu Trúc Thư Mục
+##  Cấu Trúc Thư Mục
 
 ```
 Smart_Home_Face/
@@ -337,7 +337,7 @@ Smart_Home_Face/
 └── datasets/                # Thư mục dự trữ
 ```
 
-## 🔧 API Endpoints
+##  API Endpoints
 
 ### `/api/verify-face` (POST)
 Xác thực ảnh upload
@@ -377,7 +377,7 @@ curl -X POST -H "Content-Type: application/json" \
   -d '{"ip":"192.168.1.50"}' http://localhost:8000/api/arduino/register/sensor
 ```
 
-## ⚙️ Những Phần Cần Sửa Khi Clone
+##  Những Phần Cần Sửa Khi Clone
 
 | Phần | Vị trí | Mục đích |
 |------|--------|---------|
@@ -387,7 +387,7 @@ curl -X POST -H "Content-Type: application/json" \
 | **Port Flask** | `config/app.local.json` | Nếu port 8000 bị chiếm dụng |
 | **Host Flask** | `src/app.py` | Thay `0.0.0.0` nếu muốn kết nối từ device khác |
 
-## 🔍 Tìm IP ESP32
+##  Tìm IP ESP32
 
 1. **Mở Serial Monitor** (Arduino IDE)
 2. **Chạy sketch** ESP32-CAM
@@ -396,7 +396,7 @@ curl -X POST -H "Content-Type: application/json" \
 
 Hoặc xem trong **Router settings** → Connected devices
 
-## 🔐 Tìm IP PC
+##  Tìm IP PC
 
 **Windows:**
 ```bash
@@ -409,30 +409,30 @@ Tìm dòng `IPv4 Address` trong adapter Wi-Fi/Ethernet
 ifconfig
 ```
 
-## 🐛 Xử lý Lỗi
+##  Xử lý Lỗi
 
 ### Lỗi: `Connection refused`
-- ✅ Kiểm tra Flask server đang chạy
-- ✅ Kiểm tra IP ESP32 có đúng không
-- ✅ Kiểm tra firewall cho phép port 8000
+-  Kiểm tra Flask server đang chạy
+-  Kiểm tra IP ESP32 có đúng không
+-  Kiểm tra firewall cho phép port 8000
 
 ### Lỗi: `Face not detected`
-- ✅ Chụp ảnh rõ ràng, mặt không bị che
-- ✅ Độ sáng tốt
-- ✅ Khuôn mặt hướng về camera
+-  Chụp ảnh rõ ràng, mặt không bị che
+-  Độ sáng tốt
+-  Khuôn mặt hướng về camera
 
 ### Lỗi: `No module named 'deepface'`
-- ✅ Chạy: `pip install deepface opencv-python werkzeug flask`
+-  Chạy: `pip install deepface opencv-python werkzeug flask`
 
-## 📝 License
+##  License
 
 Dự án này được tạo cho mục đích học tập và sử dụng cá nhân.
 
-## 👨‍💻 Tác Giả
+##  Tác Giả
 
 Eastern2k4 - Smart Home IoT Project
 
-## 📞 Hỗ Trợ
+##  Hỗ Trợ
 
 Nếu gặp lỗi:
 1. Kiểm tra requirements.txt đã cài đủ không
@@ -442,4 +442,4 @@ Nếu gặp lỗi:
 
 ---
 
-**Chúc bạn thành công! 🎉**
+**Chúc bạn thành công! **
