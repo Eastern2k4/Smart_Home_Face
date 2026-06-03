@@ -4,55 +4,15 @@
 #include <ESP32Servo.h>
 #include <esp_system.h>
 
+#include "config.h"
 #include <HTTPClient.h>
 
-// ================= BACKEND REGISTRATION =================
-const char* backendHost = "172.16.3.201";   // Replace with your Flask server's IP address
-const int backendPort = 5001;
-
-// ================= WIFI CONFIG =================
-const char* ssid = "TRAM 247 STUDY CAFE & WORKSPACE";
-const char* password = "tramloveyou";
-
 // ================= SERVER =================
-WebServer server(80);
-
-// ================= PIN CONFIG =================
-// Đèn
-#define LED_WC_PIN        18
-#define LED_KITCHEN_PIN   17   // TX2 = GPIO17
-#define LED_BEDROOM_PIN   16   // RX2 = GPIO16
-
-// Siêu âm phòng bếp
-#define TRIG_KITCHEN_PIN  5
-#define ECHO_KITCHEN_PIN  19
-
-// Siêu âm phòng WC
-#define TRIG_WC_PIN       21
-#define ECHO_WC_PIN       22
-
-// DHT
-#define DHT_LIVING_PIN    23
-#define DHT_BEDROOM_PIN   25
-#define DHT_TYPE          DHT11   // Nếu bạn dùng DHT22 thì đổi thành DHT22
-
-// Gas
-#define GAS_PIN           32
-
-// Servo
-#define SERVO_PIN         26
-
-// Front-door stranger alert speaker.
-#define LOA_TRUOC         27
-
-// Indoor alarm speakers.
-#define LOA_KHACH         14
-#define LOA_NGU           13
+WebServer server(SENSOR_HTTP_PORT);
 
 // Speaker sine-wave PWM config.
 #define SPEAKER_PWM_FREQ       20000
 #define SPEAKER_PWM_RESOLUTION 8
-#define SPEAKER_INACTIVE_LEVEL LOW
 #define SINE_SAMPLE_COUNT      32
 
 // ================= OBJECTS =================
@@ -71,19 +31,15 @@ bool indoorAlarmEnabled = true;
 bool gasAlarmActive = false;
 bool temperatureAlarmActive = false;
 bool humidityAlarmActive = false;
-int gasAlarmThreshold = 500;
+int gasAlarmThreshold = DEFAULT_GAS_ALARM_THRESHOLD;
 float temperatureAlarmThreshold = 35.0;
-float humidityAlarmThreshold = 80.0;
-const int GAS_ALARM_HYSTERESIS = 50;
+float humidityAlarmThreshold = DEFAULT_HUMIDITY_ALARM_THRESHOLD;
 const float TEMPERATURE_ALARM_HYSTERESIS = 1.0;
-const float HUMIDITY_ALARM_HYSTERESIS = 3.0;
 unsigned long lastAlarmCheckMs = 0;
-const unsigned long ALARM_CHECK_INTERVAL_MS = 2500;
 unsigned long lastBackendRegisterMs = 0;
-const unsigned long BACKEND_REGISTER_INTERVAL_MS = 30000;
 unsigned long frontDoorSpeakerAlertUntilMs = 0;
 unsigned long indoorSpeakerAlertUntilMs = 0;
-unsigned long speakerAlertDurationMs = 5000;
+unsigned long speakerAlertDurationMs = SPEAKER_ALERT_DURATION_MS;
 int frontDoorSpeakerVolume = 80;
 int indoorSpeakerVolume = 60;
 int speakerSineFrequency = 880;
@@ -104,7 +60,7 @@ void registerWithBackend() {
     }
 
     HTTPClient http;
-    String url = "http://" + String(backendHost) + ":" + String(backendPort) + "/api/arduino/register/sensor";
+    String url = "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/sensor";
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
@@ -589,7 +545,7 @@ void setup() {
   forceAllSpeakersOff();
 
   // WiFi
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
 
   while (WiFi.status() != WL_CONNECTED) {

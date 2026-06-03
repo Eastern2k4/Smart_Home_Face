@@ -13,7 +13,10 @@ from src.config import (
     STRANGER_ALERT_FRAMES,
     STRANGER_ALERT_SECONDS,
 )
-from src.face_recognition.database import move_temp_capture_to_stranger, save_temp_capture
+from src.face_recognition.database import (
+    move_temp_capture_to_stranger,
+    save_temp_capture,
+)
 from src.face_recognition.models import Capture, RecognitionResult, StrangerTracker
 from src.services.device_control import DeviceControlService
 from src.services.face_verification import FaceVerificationService
@@ -65,7 +68,11 @@ class CameraRecognitionService:
                 "running": self._thread is not None and self._thread.is_alive(),
                 "classification": self.current_state.classification,
                 "identity": self.current_state.identity,
-                "confidence": self.current_state.confidence,
+                "confidence": (
+                    round(self.current_state.confidence * 100, 1)
+                    if self.current_state.confidence is not None
+                    else None
+                ),
                 "distance": self.current_state.distance,
                 "threshold": self.current_state.threshold,
                 "door_allowed": self.current_state.classification == "host",

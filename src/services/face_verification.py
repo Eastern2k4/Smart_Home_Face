@@ -115,5 +115,9 @@ class FaceVerificationService:
             "identity": result.identity,
             "distance": result.distance,
             "threshold": result.threshold,
-            "confidence": result.confidence,
+            "confidence": (
+                round(result.confidence * 100, 1)
+                if result.confidence is not None
+                else None
+            ),
         }

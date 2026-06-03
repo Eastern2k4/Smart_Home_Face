@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { sensorApi } from "@/lib/api/sensors";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useStore } from "@/lib/store";
-import { DoorClosed, DoorOpen, Droplets, Gauge, Thermometer } from "lucide-react";
+import { DoorClosed, DoorOpen, Droplets, Gauge } from "lucide-react";
 import { useMemo } from "react";
 import {
   CartesianGrid,
@@ -19,7 +19,7 @@ import {
 export function SensorsPage() {
   useSensorPolling();
   const store = useStore();
-  const { temperature, humidity } = store.sensors.livingRoom;
+  const { humidity } = store.sensors.livingRoom;
 
   const distanceChartData = useMemo(() => {
     const wc = store.stats.wcDistances;
@@ -41,15 +41,8 @@ export function SensorsPage() {
     <div className="space-y-8">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <StatCard
-          title="Nhiệt độ ESP32"
-          value={temperature.toFixed(1)}
-          unit="°C"
-          icon={Thermometer}
-          status={temperature >= 35 ? "warning" : "normal"}
-        />
-        <StatCard
           title="Độ ẩm ESP32"
-          value={humidity}
+          value={humidity ?? "--"}
           unit="%"
           icon={Droplets}
         />

@@ -23,6 +23,156 @@ Hệ thống nhận diện khuôn mặt tích hợp ESP32-CAM để mở cửa t
 - Python 3.8+
 - pip (trình quản lý package Python)
 
+## Configuration
+
+The system has four runtime parts:
+
+- Frontend
+- `src/` Flask backend
+- ESP32 Sensor Node
+- ESP32-CAM
+
+The backend runs on port `8000` by default.
+
+### 1. Create local config
+
+Create:
+
+```text
+config/app.local.json
+```
+
+Example:
+
+```json
+{
+  "backend": {
+    "host": "172.16.3.201",
+    "port": 8000
+  },
+  "wifi": {
+    "ssid": "YOUR_WIFI",
+    "password": "YOUR_PASSWORD"
+  }
+}
+```
+
+Use your real laptop LAN IP for `backend.host`.
+
+Do not use `localhost` for ESP32, because ESP32 cannot reach your laptop
+through `localhost`.
+
+### 2. Find your backend LAN IP
+
+Linux/macOS:
+
+```bash
+ip addr
+# or
+ifconfig
+```
+
+Example LAN IP:
+
+```text
+172.16.3.201
+```
+
+### 3. Start backend
+
+```bash
+python -m src.app
+```
+
+Expected backend URL:
+
+```text
+http://172.16.3.201:8000
+```
+
+### 4. Configure frontend
+
+Create a frontend environment file if needed:
+
+```text
+NEXT_PUBLIC_BACKEND_URL=http://172.16.3.201:8000
+```
+
+Without `NEXT_PUBLIC_BACKEND_URL`, the frontend defaults to:
+
+```text
+http://<browser-hostname>:8000
+```
+
+### 5. Generate firmware config
+
+When backend starts, it generates `config.generated.h` for the ESP32 projects.
+
+Before flashing, verify generated config contains:
+
+```cpp
+BACKEND_HOST = "172.16.3.201"
+BACKEND_PORT = 8000
+WIFI_SSID = "YOUR_WIFI"
+WIFI_PASSWORD = "YOUR_PASSWORD"
+```
+
+The project currently uses `static const` values in the generated headers.
+
+### 6. Flash ESP32 boards
+
+Flash:
+
+- ESP32 Sensor Node
+- ESP32-CAM
+
+Both devices should connect to Wi-Fi and register to backend.
+
+### 7. Verify registration
+
+Run:
+
+```bash
+curl http://localhost:8000/api/arduino/status
+```
+
+Expected:
+
+```json
+{
+  "sensor_node": {
+    "connected": true
+  },
+  "camera_node": {
+    "connected": true
+  }
+}
+```
+
+If devices are not connected:
+
+- check Wi-Fi SSID/password
+- check backend LAN IP
+- check backend port `8000`
+- check ESP32 serial monitor
+- check firewall
+
+### Safety note about `auto`
+
+`backend.host = "auto"` may fail or choose the wrong IP if the machine has
+multiple network interfaces such as Docker, VPN, Ethernet, Wi-Fi, or Tailscale.
+
+For demos, prefer explicit LAN IP:
+
+```json
+{
+  "backend": {
+    "host": "172.16.3.201",
+    "port": 8000
+  }
+}
+```
+
 ## 🚀 Cài đặt
 
 ### 1. Clone Repository
@@ -61,8 +211,8 @@ Sửa `config/app.local.json`:
 ```json
 {
   "backend": {
-    "host": "auto",
-    "port": 5001
+    "host": "172.16.3.201",
+    "port": 8000
   },
   "wifi": {
     "ssid": "YOUR_WIFI",
@@ -70,6 +220,9 @@ Sửa `config/app.local.json`:
   }
 }
 ```
+
+Use your real laptop LAN IP for `backend.host`. Do not use `localhost` for
+ESP32, because ESP32 cannot reach your laptop through `localhost`.
 
 Sau đó khởi động backend:
 
@@ -81,12 +234,34 @@ Khi backend khởi động, `src.app` tự đọc IP LAN hiện tại của máy
 vào config generated của ESP32. Nếu máy có nhiều network interface, đặt IP cụ
 thể trong `config/app.local.json`.
 
+`backend.host = "auto"` may fail or choose the wrong IP if the machine has
+multiple network interfaces such as Docker, VPN, Ethernet, Wi-Fi, or Tailscale.
+For demos, prefer an explicit LAN IP:
+
+```json
+{
+  "backend": {
+    "host": "172.16.3.201",
+    "port": 8000
+  }
+}
+```
+
 Lệnh này tạo:
 
 - `CameraWebServer/config.generated.h`
 - `ESP32_SensorNode/config.generated.h`
 
 Hai file generated này bị ignore bởi Git để không commit Wi-Fi/password.
+
+Before flashing, verify generated config contains your real values:
+
+```cpp
+BACKEND_HOST = "172.16.3.201"
+BACKEND_PORT = 8000
+WIFI_SSID = "YOUR_WIFI"
+WIFI_PASSWORD = "YOUR_PASSWORD"
+```
 
 ### 5. Flash Code vào ESP32
 ```bash
@@ -106,13 +281,13 @@ python -m src.app
 ```
 WARNING: This is a development server. Do not use it in production deployments.
 Use a production WSGI server instead.
-* Running on http://0.0.0.0:5001
+* Running on http://0.0.0.0:8000
 ```
 
 `app.py` ở thư mục gốc là backend legacy. Backend chính hiện tại là `src/app.py`.
 
 ### 2. Mở Trình Duyệt
-- Truy cập frontend Next.js và cấu hình backend URL là `http://localhost:5001`
+- Truy cập frontend Next.js và cấu hình backend URL là `http://localhost:8000`
 
 ### 3. Thêm Khuôn Mặt vào Database
 
@@ -143,7 +318,7 @@ Use a production WSGI server instead.
 Smart_Home_Face/
 ├── app.py                    # Legacy Flask backend
 ├── src/                      # Modular Flask backend chính
-│   ├── app.py                # Entry point backend trên port 5001
+│   ├── app.py                # Entry point backend trên port 8000
 │   └── api/                  # API blueprints
 ├── requirements.txt          # Dependencies
 ├── README.md                 # File này
@@ -167,39 +342,39 @@ Smart_Home_Face/
 ### `/api/verify-face` (POST)
 Xác thực ảnh upload
 ```bash
-curl -X POST -F "image=@photo.jpg" http://localhost:5001/api/verify-face
+curl -X POST -F "image=@photo.jpg" http://localhost:8000/api/verify-face
 ```
 
 ### `/api/add-face` (POST)
 Thêm khuôn mặt mới
 ```bash
-curl -X POST -F "image=@photo.jpg" -F "name=John" http://localhost:5001/api/add-face
+curl -X POST -F "image=@photo.jpg" -F "name=John" http://localhost:8000/api/add-face
 ```
 
 ### `/api/delete-face` (POST)
 Xóa khuôn mặt
 ```bash
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"name":"John"}' http://localhost:5001/api/delete-face
+  -d '{"name":"John"}' http://localhost:8000/api/delete-face
 ```
 
 ### `/api/get-faces` (GET)
 Lấy danh sách khuôn mặt
 ```bash
-curl http://localhost:5001/api/get-faces
+curl http://localhost:8000/api/get-faces
 ```
 
 ### `/api/esp32/snapshot` (GET)
 Lấy snapshot từ ESP32-CAM
 ```bash
-curl "http://localhost:5001/api/esp32/snapshot?camera_url=http://192.168.1.102/capture"
+curl "http://localhost:8000/api/esp32/snapshot?camera_url=http://192.168.1.102/capture"
 ```
 
 ### `/api/arduino/register/sensor` (POST)
 ESP32 Sensor Node đăng ký IP với backend
 ```bash
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"ip":"192.168.1.50"}' http://localhost:5001/api/arduino/register/sensor
+  -d '{"ip":"192.168.1.50"}' http://localhost:8000/api/arduino/register/sensor
 ```
 
 ## ⚙️ Những Phần Cần Sửa Khi Clone
@@ -209,7 +384,7 @@ curl -X POST -H "Content-Type: application/json" \
 | **IP PC** | `CameraWebServer/CameraWebServer.ino:138` | Sửa thành IP máy tính chạy Flask |
 | **SSID Wi-Fi** | `CameraWebServer/CameraWebServer.ino:22` | Tên Wi-Fi nhà bạn |
 | **Password Wi-Fi** | `CameraWebServer/CameraWebServer.ino:23` | Mật khẩu Wi-Fi |
-| **Port Flask** | `src/app.py` | Nếu port 5001 bị chiếm dụng |
+| **Port Flask** | `config/app.local.json` | Nếu port 8000 bị chiếm dụng |
 | **Host Flask** | `src/app.py` | Thay `0.0.0.0` nếu muốn kết nối từ device khác |
 
 ## 🔍 Tìm IP ESP32
@@ -239,7 +414,7 @@ ifconfig
 ### Lỗi: `Connection refused`
 - ✅ Kiểm tra Flask server đang chạy
 - ✅ Kiểm tra IP ESP32 có đúng không
-- ✅ Kiểm tra firewall cho phép port 5001
+- ✅ Kiểm tra firewall cho phép port 8000
 
 ### Lỗi: `Face not detected`
 - ✅ Chụp ảnh rõ ràng, mặt không bị che

@@ -12,6 +12,8 @@ Key improvements over the old version:
 """
 
 import logging
+from urllib.parse import urlencode
+
 import requests
 from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
@@ -84,6 +86,26 @@ class SensorNodeClient:
 
     def speaker_alert(self):
         return self._request("/api/speaker/alert")
+
+    def get_speaker_settings(self):
+        return self._request("/api/speaker/settings")
+
+    def update_speaker_audio(
+        self, front_volume: int, indoor_volume: int, frequency: int, duration: int
+    ):
+        query = urlencode(
+            {
+                "frontVolume": front_volume,
+                "indoorVolume": indoor_volume,
+                "frequency": frequency,
+                "duration": duration,
+            }
+        )
+        return self._request(f"/api/speaker/audio/update?{query}")
+
+    def test_speaker(self, target: str):
+        query = urlencode({"target": target})
+        return self._request(f"/api/speaker/test?{query}")
 
     # ── sensors ───────────────────────────────────────────────────────────
 

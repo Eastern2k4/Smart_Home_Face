@@ -7,8 +7,8 @@ function getApiBases() {
   }
 
   return [
-    `${window.location.protocol}//${window.location.hostname}:5001`,
-    "http://localhost:5001",
+    `${window.location.protocol}//${window.location.hostname}:8000`,
+    "http://localhost:8000",
   ];
 }
 

@@ -7,7 +7,7 @@ door/light control. Workflow handling lives in DeviceControlService.
 
 import logging
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
@@ -84,5 +84,26 @@ def create_devices_blueprint(device_control_service):
             return device_control_service.trigger_speaker_alert().response
 
         return _arduino_call(_trigger)
+
+    @devices_bp.route("/speaker/settings", methods=["GET"])
+    def speaker_settings():
+        return _arduino_call(device_control_service.get_speaker_settings)
+
+    @devices_bp.route("/speaker/audio", methods=["POST"])
+    def speaker_audio():
+        data = request.get_json(silent=True) or {}
+        return _arduino_call(
+            device_control_service.update_speaker_audio,
+            int(data.get("frontVolume", 80)),
+            int(data.get("indoorVolume", 60)),
+            int(data.get("frequency", 880)),
+            int(data.get("duration", 5000)),
+        )
+
+    @devices_bp.route("/speaker/test/<target>", methods=["POST"])
+    def speaker_test(target):
+        if target not in ("front", "indoor"):
+            return jsonify({"error": "target must be 'front' or 'indoor'"}), 400
+        return _arduino_call(device_control_service.test_speaker, target)
 
     return devices_bp
