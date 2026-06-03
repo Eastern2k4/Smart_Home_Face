@@ -493,6 +493,7 @@ static esp_err_t index_handler(httpd_req_t *req) {
 // ========== Public server start ==========
 void start_camera_server(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = HTTP_PORT;
     config.max_uri_handlers = 16;
 
     httpd_uri_t index_uri   = { .uri = "/", .method = HTTP_GET, .handler = index_handler };
@@ -523,7 +524,7 @@ void start_camera_server(void) {
         httpd_register_uri_handler(camera_httpd, &win_uri);
     }
 
-    config.server_port += 1;
+    config.server_port = STREAM_PORT;
     config.ctrl_port += 1;
     log_i("Starting stream server on port: %d", config.server_port);
     if (httpd_start(&stream_httpd, &config) == ESP_OK) {

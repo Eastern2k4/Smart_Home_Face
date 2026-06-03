@@ -147,6 +147,22 @@ class DeviceControlService:
             )
         )
 
+    def get_speaker_settings(self):
+        return self.sensor.get_speaker_settings()
+
+    def update_speaker_audio(
+        self, front_volume: int, indoor_volume: int, frequency: int, duration: int
+    ):
+        return self.sensor.update_speaker_audio(
+            front_volume,
+            indoor_volume,
+            frequency,
+            duration,
+        )
+
+    def test_speaker(self, target: str):
+        return self.sensor.test_speaker(target)
+
     def last_action(self) -> dict | None:
         if not self._last_action:
             return None

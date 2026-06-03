@@ -5,14 +5,14 @@ import { useAutoLED } from "@/lib/hooks/useAutoLED";
 import { useCameraStream } from "@/lib/hooks/useCameraStream";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useStore } from "@/lib/store";
-import { Droplets, Flame, Thermometer } from "lucide-react";
+import { Droplets, Flame } from "lucide-react";
 
 export function OverviewPage() {
   useSensorPolling();
   useAutoLED();
   const streamUrl = useCameraStream();
   const store = useStore();
-  const { temperature, humidity } = store.sensors.livingRoom;
+  const { humidity } = store.sensors.livingRoom;
   const gas = store.sensors.gas;
   const gasTwo = Math.max(0, Math.round(gas * 0.4));
 
@@ -20,13 +20,11 @@ export function OverviewPage() {
     <div className="space-y-8">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <StatCard
-          title="Nhiệt độ"
-          value={temperature.toFixed(1)}
-          unit="°C"
-          icon={Thermometer}
-          status={temperature >= 35 ? "warning" : "normal"}
+          title="Độ ẩm"
+          value={humidity ?? "--"}
+          unit="%"
+          icon={Droplets}
         />
-        <StatCard title="Độ ẩm" value={humidity} unit="%" icon={Droplets} />
         <StatCard
           title="Khí Gas 1"
           value={gas}

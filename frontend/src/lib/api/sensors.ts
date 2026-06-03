@@ -5,10 +5,10 @@ function getApiBase() {
   }
 
   if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:5001`;
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
   }
 
-  return "http://localhost:5001";
+  return "http://localhost:8000";
 }
 
 export const sensorApi = {
