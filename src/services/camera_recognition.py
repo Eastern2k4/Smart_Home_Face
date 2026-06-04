@@ -77,6 +77,8 @@ class CameraRecognitionService:
                 ),
                 "distance": self.current_state.distance,
                 "threshold": self.current_state.threshold,
+                "liveness_score": self.current_state.liveness_score,
+                "reason": self.current_state.reason,
                 "door_allowed": self.current_state.classification == "host",
                 "stranger_duration_seconds": self._get_stranger_duration(),
                 "stranger_scan_count": self.stranger_scan_count,
@@ -138,28 +140,44 @@ class CameraRecognitionService:
 
     def _process_capture(self, image_data):
         image_path = save_temp_capture(image_data)
-        has_face = self.face_verification.has_face(image_path)
-        return Capture(image_path, has_face=has_face)
+        return Capture(image_path, has_face=True)
 
     def _update_state(self, capture: Capture):
         now = time.time()
         action_result = None
-        result = RecognitionResult("no_face", None, None, None, None)
         should_alert = False
         stranger_path = None
 
-        if capture.has_face:
-            result = self.face_verification.classify_host_image(capture.image_path)
+        result = self.face_verification.classify_host_image(capture.image_path)
 
         with self._lock:
             self.last_error_type = None
             self.last_error_message = None
-            if not capture.has_face or result.classification == "no_face":
+            if result.classification in ("no_face", "error"):
                 self.stranger_tracker.reset()
                 self.stranger_scan_count = 0
                 self.image_path = None
                 self.current_state = RecognitionResult(
-                    "no_face", None, None, None, None
+                    result.classification,
+                    None,
+                    None,
+                    None,
+                    None,
+                    liveness_score=result.liveness_score,
+                    reason=result.reason,
+                )
+            elif result.classification == "spoof":
+                self.stranger_tracker.reset()
+                self.stranger_scan_count = 0
+                self.image_path = None
+                self.current_state = result
+                self._set_event_locked(
+                    "spoof_detected",
+                    (
+                        f"Invalid or spoofed face detected (score={result.liveness_score:.3f})"
+                        if result.liveness_score is not None
+                        else "Invalid or spoofed face detected"
+                    ),
                 )
             elif result.classification == "host":
                 self.stranger_tracker.reset()
@@ -206,9 +224,9 @@ class CameraRecognitionService:
                     stranger_path = move_temp_capture_to_stranger(capture.image_path)
                 except Exception:
                     logger.exception("camera recognition stranger alert failed")
-        elif result.classification == "no_face" or not capture.has_face:
+        elif result.classification in ("no_face", "spoof", "error"):
             try:
-                self.device_control.handle_non_host_seen("no_face")
+                self.device_control.handle_non_host_seen(result.classification)
             except Exception:
                 logger.exception("camera recognition close-door action failed")
 

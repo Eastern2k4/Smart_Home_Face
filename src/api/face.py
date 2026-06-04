@@ -45,15 +45,33 @@ def create_face_blueprint(face_verification_service, device_control_service):
         name = request.form.get("name", "").strip()
         if file.filename == "":
             return jsonify({"error": "Empty file"}), 400
-        tmp_path = face_verification_service.save_upload_to_temp(file)
-        try:
-            if not face_verification_service.has_face(tmp_path):
-                return jsonify({"error": "No face detected in uploaded image"}), 400
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+
+        validation = face_verification_service.validate_host_upload(file)
+        if validation.classification == "no_face":
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "classification": "no_face",
+                        "message": "No face detected in host image",
+                    }
+                ),
+                400,
+            )
+        if validation.classification == "spoof":
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "classification": "spoof",
+                        "message": "Face image failed anti-spoofing check",
+                        "liveness_score": validation.liveness_score,
+                        "reason": validation.reason,
+                    }
+                ),
+                400,
+            )
+
         file.seek(0)
         filepath = face_verification_service.add_host_face(file, name=name or None)
         logger.info("Added host face '%s' at %s", name or "Hosts", filepath)
@@ -63,7 +81,9 @@ def create_face_blueprint(face_verification_service, device_control_service):
                 "identity": "Hosts",
                 "name": name or "Hosts",
                 "path": filepath,
-                "message": "Host face added",
+                "classification": "host_registered",
+                "liveness_score": validation.liveness_score,
+                "message": "Host face registered successfully",
             }
         )
 
@@ -94,6 +114,9 @@ def create_face_blueprint(face_verification_service, device_control_service):
                     {
                         "match": False,
                         "classification": result.get("classification"),
+                        "message": result.get("message"),
+                        "liveness_score": recognition.liveness_score,
+                        "reason": recognition.reason,
                     }
                 )
             best_match = result["best_match"]
@@ -108,6 +131,8 @@ def create_face_blueprint(face_verification_service, device_control_service):
                     "match": True,
                     "best_match": best_match,
                     "classification": result.get("classification"),
+                    "liveness_score": recognition.liveness_score,
+                    "reason": recognition.reason,
                     "action": action.to_dict(),
                 }
             )

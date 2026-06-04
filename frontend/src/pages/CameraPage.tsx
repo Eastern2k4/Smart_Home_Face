@@ -47,9 +47,19 @@ export function CameraPage() {
                 status.event_message ||
                 "Stranger alert: speaker triggered on scan 5",
             });
+          } else if (status.event_type === "spoof_detected") {
+            setRecognitionNotice(
+              status.event_message || "Canh bao: phat hien khuon mat gia mao",
+            );
+            store.addEvent({
+              timestamp: new Date().toISOString(),
+              type: "buzzer",
+              value: 0,
+              action: status.event_message || "Spoofed face detected",
+            });
           }
 
-          if (status.classification === "stranger") {
+          if (status.classification === "stranger" || status.classification === "spoof") {
             store.setDoorState(false);
           }
         })
@@ -97,6 +107,8 @@ export function CameraPage() {
                 ? "bg-success/10 text-success"
                 : recognitionStatus?.stranger_alert
                   ? "bg-destructive/10 text-destructive"
+                  : recognitionStatus?.classification === "spoof"
+                    ? "bg-destructive/10 text-destructive"
                   : "bg-secondary text-muted-foreground"
             }`}
           >
@@ -104,6 +116,8 @@ export function CameraPage() {
               ? "HOST"
               : recognitionStatus?.stranger_alert
                 ? "STRANGER ALERT"
+                : recognitionStatus?.classification === "spoof"
+                  ? "SPOOF"
                 : recognitionStatus?.classification ?? "idle"}
           </span>
         </div>
@@ -131,6 +145,14 @@ export function CameraPage() {
             </p>
           </div>
           <div className="rounded-xl bg-secondary p-4">
+            <p className="text-sm text-muted-foreground">Do that khuon mat</p>
+            <p className="mt-1 text-xl font-semibold">
+              {recognitionStatus?.liveness_score != null
+                ? `${(recognitionStatus.liveness_score * 100).toFixed(1)}%`
+                : "--"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-secondary p-4">
             <p className="text-sm text-muted-foreground">Cap nhat</p>
             <p className="mt-1 text-xl font-semibold">
               {recognitionStatus?.updated_at
@@ -142,8 +164,14 @@ export function CameraPage() {
 
         {recognitionStatus?.stranger_alert && (
           <p className="mt-5 rounded-xl bg-destructive/10 p-4 text-destructive">
-            Canh bao: nguoi la xuat hien lien tuc tren 5 phut. Anh da duoc luu
+            Canh bao: nguoi la xuat hien lien tuc tu 5 khung hinh. Anh da duoc luu
             vao database/Strangers.
+          </p>
+        )}
+        {recognitionStatus?.classification === "spoof" && (
+          <p className="mt-5 rounded-xl bg-destructive/10 p-4 text-destructive">
+            Canh bao: khuon mat khong vuot qua kiem tra chong gia mao. Khong
+            mo cua va khong tinh la nguoi la.
           </p>
         )}
         {recognitionStatus?.error && (

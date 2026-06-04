@@ -12,7 +12,9 @@
     "stranger_alert_seconds": 30,
     "stranger_alert_frames": 5,
     "door_close_stable_frames": 2,
-    "temp_max_images": 100
+    "temp_max_images": 100,
+    "anti_spoofing_enabled": true,
+    "anti_spoofing_fail_closed": false
   },
   "firmware": {
     "register_interval_ms": 30000,

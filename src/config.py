@@ -138,6 +138,16 @@ DOOR_CLOSE_STABLE_FRAMES = _env(
     int(RECOGNITION_CONFIG["door_close_stable_frames"]),
     int,
 )
+ANTI_SPOOFING_ENABLED = _env(
+    "ANTI_SPOOFING_ENABLED",
+    bool(RECOGNITION_CONFIG.get("anti_spoofing_enabled", True)),
+    lambda v: str(v).lower() not in ("0", "false", "no"),
+)
+ANTI_SPOOFING_FAIL_CLOSED = _env(
+    "ANTI_SPOOFING_FAIL_CLOSED",
+    bool(RECOGNITION_CONFIG.get("anti_spoofing_fail_closed", False)),
+    lambda v: str(v).lower() in ("1", "true", "yes"),
+)
 HOST_IDENTITY = "Hosts"
 
 BACKEND_HOST = _resolve_backend_host(_env("BACKEND_HOST", BACKEND_CONFIG["host"], str))

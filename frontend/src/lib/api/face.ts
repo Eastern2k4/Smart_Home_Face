@@ -21,15 +21,17 @@ export interface VerificationResult {
 export interface RecognitionStatus {
   running: boolean;
   door_allowed: boolean;
-  classification: "idle" | "host" | "stranger" | "no_face";
+  classification: "idle" | "host" | "stranger" | "no_face" | "spoof" | "error";
   identity: string | null;
   confidence: number | null;
+  liveness_score: number | null;
+  reason: string | null;
   image_path: string | null;
   stranger_duration_seconds: number;
   stranger_scan_count: number;
   stranger_alert: boolean;
   event_id: number;
-  event_type: "host" | "stranger_alert" | null;
+  event_type: "host" | "stranger" | "stranger_alert" | "spoof_detected" | null;
   event_message: string | null;
   event_at: string | null;
   speaker_target: "front_door" | "house_gas" | null;
@@ -73,7 +75,9 @@ export const faceApi = {
     } else {
       return {
         verified: false,
-        message: data.best_match?.identity
+        message: data.message
+          ? data.message
+          : data.best_match?.identity
           ? `Not a match (closest: ${data.best_match.identity})`
           : "Face not recognized",
       };

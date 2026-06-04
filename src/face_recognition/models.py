@@ -17,11 +17,22 @@ class Capture:
 class RecognitionResult:
     """Result of comparing a capture against known faces."""
 
-    classification: str  # "host", "stranger", "no_face"
+    classification: str  # "idle", "no_face", "spoof", "host", "stranger", "error"
     identity: Optional[str]  # "Hosts" or None
     confidence: Optional[float]
     distance: Optional[float]
     threshold: Optional[float]
+    liveness_score: Optional[float] = None
+    reason: Optional[str] = None
+
+
+@dataclass
+class AntiSpoofResult:
+    """Result of the anti-spoofing / liveness check."""
+
+    is_real: bool
+    score: Optional[float] = None
+    reason: Optional[str] = None
 
 
 class StrangerTracker:

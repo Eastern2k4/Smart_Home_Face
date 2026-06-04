@@ -1,7 +1,18 @@
 import os
+import logging
 from deepface import DeepFace
-from src.config import DB_PATH, FACE_MODEL, FACE_DETECTOR
+from src.config import (
+    ANTI_SPOOFING_ENABLED,
+    ANTI_SPOOFING_FAIL_CLOSED,
+    DB_PATH,
+    FACE_MODEL,
+    FACE_DETECTOR,
+)
+from src.face_recognition.models import AntiSpoofResult
 from .database import allowed_file
+
+logger = logging.getLogger("verifier")
+_antispoof_instance = None
 
 
 class FaceNotDetected(Exception):
@@ -22,6 +33,50 @@ def has_face(image_path):
         if "Face could not be detected" in str(e):
             return False
         return False
+
+
+def _get_antispoof():
+    global _antispoof_instance
+    if _antispoof_instance is None:
+        from deepface_antispoofing import DeepFaceAntiSpoofing
+
+        _antispoof_instance = DeepFaceAntiSpoofing()
+    return _antispoof_instance
+
+
+def check_liveness(image_path: str) -> AntiSpoofResult:
+    """Return whether the image contains a real/live face."""
+    if not ANTI_SPOOFING_ENABLED:
+        return AntiSpoofResult(is_real=True, reason="disabled")
+
+    try:
+        analyzer = _get_antispoof()
+        result = analyzer.analyze_image(image_path)
+    except Exception as e:
+        logger.warning("[liveness] anti-spoof API error: %s", e)
+        if ANTI_SPOOFING_FAIL_CLOSED:
+            return AntiSpoofResult(is_real=False, reason="api_error")
+        return AntiSpoofResult(is_real=True, reason="api_error_skipped")
+
+    if "error" in result:
+        logger.debug("[liveness] anti-spoof no-face result: %s", result["error"])
+        return AntiSpoofResult(is_real=False, reason="no_face")
+
+    score = result.get("spoof", {}).get("Real")
+    dominant = result.get("dominant_spoof", "Fake")
+    is_real = dominant == "Real"
+
+    logger.debug(
+        "[liveness] dominant=%s score=%.3f path=%s",
+        dominant,
+        score if score is not None else -1,
+        image_path,
+    )
+    return AntiSpoofResult(
+        is_real=is_real,
+        score=score,
+        reason="real" if is_real else "spoof",
+    )
 
 
 def verify_against_database(image_path, allowed_identities=None):
