@@ -159,16 +159,18 @@ class DeviceControlService:
         self,
         front_volume: int,
         house_gas_volume: int,
-        front_frequency: int,
-        house_gas_frequency: int,
         duration: int,
+        gas_threshold: int,
+        temperature_threshold: float,
+        humidity_threshold: float,
     ):
         return self.sensor.update_speaker_audio(
             front_volume,
             house_gas_volume,
-            front_frequency,
-            house_gas_frequency,
             duration,
+            gas_threshold,
+            temperature_threshold,
+            humidity_threshold,
         )
 
     def test_speaker(self, target: str):

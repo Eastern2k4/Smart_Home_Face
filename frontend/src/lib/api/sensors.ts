@@ -81,9 +81,10 @@ export const sensorApi = {
   async updateSpeakerAudio(settings: {
     frontVolume: number;
     houseGasVolume: number;
-    frontFrequency: number;
-    houseGasFrequency: number;
     duration: number;
+    gasThreshold: number;
+    temperatureThreshold: number;
+    humidityThreshold: number;
   }) {
     const res = await fetch(`${getApiBase()}/api/speaker/audio`, {
       method: "POST",

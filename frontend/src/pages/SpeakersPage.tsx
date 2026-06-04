@@ -2,18 +2,24 @@
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { sensorApi, type SpeakerTarget } from "@/lib/api/sensors";
+import { useStore } from "@/lib/store";
 import { AudioWaveform, Play, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type SpeakerState = {
   active?: boolean;
   volume?: number;
-  frequency?: number;
   reason?: string | null;
 };
 
 type SpeakerSettings = {
   alertDurationMs?: number;
+  gasThreshold?: number;
+  thresholds?: {
+    gas?: number;
+    temperature?: number;
+    humidity?: number;
+  };
   speakers?: Record<SpeakerTarget, SpeakerState>;
 };
 
@@ -25,29 +31,32 @@ const speakerCards: Array<{
 }> = [
   {
     target: "front_door",
-    title: "Front Door Stranger Alarm",
-    purpose: "Backend recognition triggers this after 5 stranger frames.",
+    title: "Loa canh bao cua truoc",
+    purpose: "Backend kich hoat khi nhan dien nguoi la du 5 khung hinh.",
     pin: "GPIO27",
   },
   {
     target: "house_gas",
-    title: "House Gas Alarm",
-    purpose: "ESP32 Sensor Node triggers this locally when gas is unsafe.",
-    pin: "GPIO14",
+    title: "Loa canh bao moi truong",
+    purpose:
+      "ESP32 Sensor Node kich hoat cuc bo khi khi gas, nhiet do hoac do am vuot nguong.",
+    pin: "GPIO14 + GPIO13",
   },
 ];
 
 export function SpeakersPage() {
   const [frontVolume, setFrontVolume] = useState(80);
   const [houseGasVolume, setHouseGasVolume] = useState(75);
-  const [frontFrequency, setFrontFrequency] = useState(880);
-  const [houseGasFrequency, setHouseGasFrequency] = useState(1200);
   const [duration, setDuration] = useState(5000);
+  const [gasThreshold, setGasThreshold] = useState(500);
+  const [temperatureThreshold, setTemperatureThreshold] = useState(35);
+  const [humidityThreshold, setHumidityThreshold] = useState(80);
   const [speakerState, setSpeakerState] = useState<
     Partial<Record<SpeakerTarget, SpeakerState>>
   >({});
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const setStoreGasThreshold = useStore((state) => state.setGasThreshold);
 
   useEffect(() => {
     let mounted = true;
@@ -60,9 +69,13 @@ export function SpeakersPage() {
         const houseGas = settings.speakers?.house_gas;
         setFrontVolume(frontDoor?.volume ?? 80);
         setHouseGasVolume(houseGas?.volume ?? 75);
-        setFrontFrequency(frontDoor?.frequency ?? 880);
-        setHouseGasFrequency(houseGas?.frequency ?? 1200);
         setDuration(settings.alertDurationMs ?? 5000);
+        const loadedGasThreshold =
+          settings.thresholds?.gas ?? settings.gasThreshold ?? 500;
+        setGasThreshold(loadedGasThreshold);
+        setStoreGasThreshold(loadedGasThreshold);
+        setTemperatureThreshold(settings.thresholds?.temperature ?? 35);
+        setHumidityThreshold(settings.thresholds?.humidity ?? 80);
         setSpeakerState(settings.speakers ?? {});
       })
       .catch(() => {
@@ -72,7 +85,7 @@ export function SpeakersPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [setStoreGasThreshold]);
 
   const saveSettings = async () => {
     setLoading(true);
@@ -81,12 +94,14 @@ export function SpeakersPage() {
       const settings = await sensorApi.updateSpeakerAudio({
         frontVolume,
         houseGasVolume,
-        frontFrequency,
-        houseGasFrequency,
         duration,
+        gasThreshold,
+        temperatureThreshold,
+        humidityThreshold,
       });
       setSpeakerState(settings.speakers ?? {});
-      setMessage("Da luu cau hinh 2 loa canh bao.");
+      setStoreGasThreshold(gasThreshold);
+      setMessage("Da luu cau hinh loa va nguong canh bao.");
     } catch {
       setMessage("Khong luu duoc cau hinh loa. Kiem tra backend va ESP32 sensor.");
     } finally {
@@ -101,7 +116,7 @@ export function SpeakersPage() {
       setMessage(
         target === "front_door"
           ? "Dang test loa front_door tren GPIO27."
-          : "Dang test loa house_gas tren GPIO14.",
+          : "Dang test loa house_gas tren GPIO14 va GPIO13.",
       );
     } catch {
       setMessage("Khong test duoc loa. Kiem tra ESP32 sensor.");
@@ -114,12 +129,6 @@ export function SpeakersPage() {
     target === "front_door"
       ? setFrontVolume(value)
       : setHouseGasVolume(value);
-  const frequencyFor = (target: SpeakerTarget) =>
-    target === "front_door" ? frontFrequency : houseGasFrequency;
-  const setFrequencyFor = (target: SpeakerTarget, value: number) =>
-    target === "front_door"
-      ? setFrontFrequency(value)
-      : setHouseGasFrequency(value);
 
   return (
     <div className="space-y-6">
@@ -152,17 +161,17 @@ export function SpeakersPage() {
 
               <div className="mt-6 grid gap-3 text-base text-muted-foreground">
                 <div className="flex justify-between">
-                  <span>Active</span>
-                  <span>{state?.active ? "Yes" : "No"}</span>
+                  <span>Trang thai</span>
+                  <span>{state?.active ? "Dang bat" : "Dang tat"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Reason</span>
+                  <span>Ly do</span>
                   <span>{state?.reason ?? "none"}</span>
                 </div>
               </div>
 
               <div className="mt-8 flex justify-between text-lg">
-                <span>Volume</span>
+                <span>Am luong</span>
                 <span>{volumeFor(speaker.target)}%</span>
               </div>
               <Slider
@@ -171,21 +180,6 @@ export function SpeakersPage() {
                 step={1}
                 value={[volumeFor(speaker.target)]}
                 onValueChange={([value]) => setVolumeFor(speaker.target, value)}
-              />
-
-              <div className="mt-7 flex justify-between text-lg">
-                <span>Frequency</span>
-                <span>{frequencyFor(speaker.target)} Hz</span>
-              </div>
-              <Slider
-                className="mt-4"
-                min={100}
-                max={3000}
-                step={10}
-                value={[frequencyFor(speaker.target)]}
-                onValueChange={([value]) =>
-                  setFrequencyFor(speaker.target, value)
-                }
               />
             </section>
           );
@@ -199,7 +193,7 @@ export function SpeakersPage() {
             <div>
               <h3 className="text-2xl font-bold">Speaker Timing</h3>
               <p className="mt-1 text-lg text-muted-foreground">
-                Stranger/manual tests are timed. Gas stays active while unsafe.
+                Canh bao cua truoc co thoi luong. Canh bao moi truong bat khi gia tri vuot nguong.
               </p>
             </div>
           </div>
@@ -211,7 +205,7 @@ export function SpeakersPage() {
 
         <div className="mt-8">
           <div className="flex justify-between text-lg">
-            <span>Timed alert duration</span>
+            <span>Thoi luong canh bao</span>
             <span>{(duration / 1000).toFixed(1)}s</span>
           </div>
           <Slider
@@ -222,6 +216,53 @@ export function SpeakersPage() {
             value={[duration]}
             onValueChange={([value]) => setDuration(value)}
           />
+        </div>
+
+        <div className="mt-8 grid gap-7">
+          <div>
+            <div className="flex justify-between text-lg">
+              <span>Nguong khi gas</span>
+              <span>{gasThreshold}</span>
+            </div>
+            <Slider
+              className="mt-4"
+              min={0}
+              max={2000}
+              step={10}
+              value={[gasThreshold]}
+              onValueChange={([value]) => setGasThreshold(value)}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-lg">
+              <span>Nguong nhiet do</span>
+              <span>{temperatureThreshold}°C</span>
+            </div>
+            <Slider
+              className="mt-4"
+              min={20}
+              max={60}
+              step={1}
+              value={[temperatureThreshold]}
+              onValueChange={([value]) => setTemperatureThreshold(value)}
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-lg">
+              <span>Nguong do am</span>
+              <span>{humidityThreshold}%</span>
+            </div>
+            <Slider
+              className="mt-4"
+              min={30}
+              max={100}
+              step={1}
+              value={[humidityThreshold]}
+              onValueChange={([value]) => setHumidityThreshold(value)}
+            />
+          </div>
         </div>
 
         {message ? (

@@ -106,17 +106,19 @@ class SensorNodeClient:
         self,
         front_volume: int,
         house_gas_volume: int,
-        front_frequency: int,
-        house_gas_frequency: int,
         duration: int,
+        gas_threshold: int,
+        temperature_threshold: float,
+        humidity_threshold: float,
     ):
         query = urlencode(
             {
                 "frontVolume": front_volume,
                 "houseGasVolume": house_gas_volume,
-                "frontFrequency": front_frequency,
-                "houseGasFrequency": house_gas_frequency,
                 "duration": duration,
+                "gas": gas_threshold,
+                "temperature": temperature_threshold,
+                "humidity": humidity_threshold,
             }
         )
         return self._request(f"/api/speaker/audio/update?{query}")

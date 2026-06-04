@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { sensorApi } from "@/lib/api/sensors";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useStore } from "@/lib/store";
-import { DoorClosed, DoorOpen, Droplets, Gauge, Thermometer } from "lucide-react";
+import {
+  DoorClosed,
+  DoorOpen,
+  Droplets,
+  Flame,
+  Gauge,
+  Thermometer,
+} from "lucide-react";
 import { useMemo } from "react";
 import {
   CartesianGrid,
@@ -77,6 +84,13 @@ export function SensorsPage() {
               ? "warning"
               : "normal"
           }
+        />
+        <StatCard
+          title="Khí gas"
+          value={store.sensors.gas}
+          unit="ppm"
+          icon={Flame}
+          status={store.sensors.gas >= store.gasThreshold ? "danger" : "normal"}
         />
         <StatCard
           title="Cảm biến WC"

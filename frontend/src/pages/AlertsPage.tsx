@@ -13,6 +13,8 @@ type DeviceStatus = {
   alarmTriggers?: {
     stranger?: boolean;
     gas?: boolean;
+    temperature?: boolean;
+    humidity?: boolean;
   };
 };
 
@@ -85,9 +87,10 @@ export function AlertsPage() {
           </div>
           <div className="flex items-center justify-between rounded-xl border border-border p-6">
             <div>
-              <h3 className="text-2xl font-semibold">Gas alert</h3>
+              <h3 className="text-2xl font-semibold">Canh bao moi truong</h3>
               <p className="text-lg text-muted-foreground">
-                Source: ESP32 gas sensor - speaker: house_gas
+                Source: ESP32 gas, temperature, humidity sensors - speaker:
+                house_gas
               </p>
             </div>
             <div className="flex items-center gap-6 text-xl text-muted-foreground">

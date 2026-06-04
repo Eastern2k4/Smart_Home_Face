@@ -112,13 +112,27 @@ def create_devices_blueprint(device_control_service):
     @devices_bp.route("/speaker/audio", methods=["POST"])
     def speaker_audio():
         data = request.get_json(silent=True) or {}
+        try:
+            front_volume = int(data.get("frontVolume", 80))
+            house_gas_volume = int(data.get("houseGasVolume", 75))
+            duration = int(data.get("duration", 5000))
+            gas_threshold = int(data.get("gasThreshold", 500))
+            temperature_threshold = float(data.get("temperatureThreshold", 35))
+            humidity_threshold = float(data.get("humidityThreshold", 80))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid_speaker_threshold"}), 400
+
+        if gas_threshold < 0 or temperature_threshold <= 0 or humidity_threshold <= 0:
+            return jsonify({"error": "invalid_speaker_threshold"}), 400
+
         return _arduino_call(
             device_control_service.update_speaker_audio,
-            int(data.get("frontVolume", 80)),
-            int(data.get("houseGasVolume", 75)),
-            int(data.get("frontFrequency", data.get("frequency", 880))),
-            int(data.get("houseGasFrequency", 1200)),
-            int(data.get("duration", 5000)),
+            front_volume,
+            house_gas_volume,
+            duration,
+            gas_threshold,
+            temperature_threshold,
+            humidity_threshold,
         )
 
     @devices_bp.route("/speaker/test/<target>", methods=["POST"])
