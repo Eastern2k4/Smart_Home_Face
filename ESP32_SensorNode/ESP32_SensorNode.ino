@@ -6,9 +6,31 @@
 
 #include "config.h"
 #include <HTTPClient.h>
+#if __has_include("config.generated.h")
+#include "config.generated.h"
+#else
+#include "config.generated.example.h"
+#endif
 
 // ================= SERVER =================
 WebServer server(SENSOR_HTTP_PORT);
+
+// ================= PIN CONFIG =================
+#define LED_WC_PIN        18
+#define LED_KITCHEN_PIN   17
+#define LED_BEDROOM_PIN   16
+#define TRIG_KITCHEN_PIN  5
+#define ECHO_KITCHEN_PIN  19
+#define TRIG_WC_PIN       21
+#define ECHO_WC_PIN       22
+#define DHT_LIVING_PIN    23
+#define DHT_BEDROOM_PIN   25
+#define DHT_TYPE          DHT11
+#define GAS_PIN           32
+#define SERVO_PIN         26
+#define LOA_TRUOC         27
+#define LOA_KHACH         14
+#define LOA_NGU           13
 
 // Speaker sine-wave PWM config.
 #define SPEAKER_PWM_FREQ       20000
