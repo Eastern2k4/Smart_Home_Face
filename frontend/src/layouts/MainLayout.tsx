@@ -30,7 +30,7 @@ const navItems: Array<{ id: PageId; label: string; icon: typeof Home }> = [
   { id: "sensors", label: "Cảm biến", icon: Thermometer },
   { id: "lights", label: "Đèn", icon: Lightbulb },
   { id: "camera", label: "Cửa ra vào", icon: Camera },
-  { id: "face-id", label: "Face ID", icon: UserCheck },
+  { id: "face-id", label: "Nhận diện", icon: UserCheck },
   { id: "speakers", label: "Loa", icon: Speaker },
   { id: "alerts", label: "Cảnh báo", icon: Bell },
   { id: "settings", label: "Cài đặt", icon: Settings },
@@ -41,7 +41,7 @@ const titles: Record<PageId, string> = {
   sensors: "Cảm biến",
   lights: "Điều khiển đèn",
   camera: "Cửa ra vào",
-  "face-id": "Face ID",
+  "face-id": "Nhận diện khuôn mặt",
   speakers: "Hệ thống loa",
   alerts: "Cảnh báo",
   settings: "Cài đặt",
@@ -56,6 +56,14 @@ function formatDate() {
   });
 }
 
+const eventTypeLabel: Record<string, string> = {
+  gas: "Khí gas",
+  led: "Đèn",
+  distance: "Khoảng cách",
+  door: "Cửa",
+  buzzer: "Loa",
+};
+
 export function MainLayout({
   activePage,
   setActivePage,
@@ -66,11 +74,11 @@ export function MainLayout({
   children: React.ReactNode;
 }) {
   const store = useStore();
-  const alertCount = store.gasAlertActive ? 1 : 0;
+  const recentEvents = store.events.slice(0, 5);
+  const alertCount = recentEvents.length + (store.gasAlertActive ? 1 : 0);
 
   return (
     <main className="grid min-h-screen overflow-x-hidden bg-background text-foreground md:grid-cols-[360px_minmax(0,1fr)]">
-      {/* Sidebar */}
       <aside className="hidden min-h-screen border-r border-sidebar-border bg-sidebar md:flex md:flex-col">
         <div className="grid h-24 grid-cols-[1fr_40px] items-center border-b border-sidebar-border px-6">
           <div className="flex min-w-0 items-center gap-5">
@@ -116,7 +124,6 @@ export function MainLayout({
         </div>
       </aside>
 
-      {/* Main content */}
       <section className="min-w-0">
         <header className="sticky top-0 z-30 border-b border-border bg-background/90 px-6 backdrop-blur-sm lg:px-10">
           <div className="grid h-24 grid-cols-1 items-center gap-4 lg:grid-cols-[minmax(240px,1fr)_auto]">
@@ -155,14 +162,68 @@ export function MainLayout({
                   className="h-14 w-[min(28vw,460px)] rounded-2xl border border-input bg-secondary pl-14 pr-5 text-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <button className="relative rounded-2xl p-3 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                <Bell className="h-7 w-7" />
-                {alertCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-sm font-bold text-destructive-foreground">
-                    {alertCount}
-                  </span>
-                )}
-              </button>
+              <div className="group relative">
+                <button
+                  type="button"
+                  aria-label="Mở trang cảnh báo"
+                  title="Cảnh báo"
+                  onClick={() => setActivePage("alerts")}
+                  className={cn(
+                    "relative rounded-2xl p-3 transition-colors hover:bg-secondary hover:text-foreground",
+                    activePage === "alerts"
+                      ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  <Bell className="h-7 w-7" />
+                  {alertCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-sm font-bold text-destructive-foreground">
+                      {alertCount}
+                    </span>
+                  )}
+                </button>
+                <div className="pointer-events-auto absolute right-0 top-full z-50 hidden w-[360px] rounded-xl border border-border bg-card p-4 text-card-foreground shadow-xl group-hover:block group-focus-within:block">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-base font-semibold">Thông báo gần đây</p>
+                    <button
+                      type="button"
+                      className="pointer-events-auto text-sm text-primary"
+                      onClick={() => setActivePage("alerts")}
+                    >
+                      Xem tất cả
+                    </button>
+                  </div>
+                  {store.gasAlertActive && (
+                    <div className="mb-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                      Khí gas đang vượt ngưỡng cảnh báo.
+                    </div>
+                  )}
+                  {recentEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Chưa có thông báo nào.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentEvents.map((event, index) => (
+                        <div
+                          key={`${event.timestamp}-${index}`}
+                          className="rounded-lg bg-secondary p-3"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold text-primary">
+                              {eventTypeLabel[event.type] ?? event.type}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {new Date(event.timestamp).toLocaleTimeString("vi-VN")}
+                            </span>
+                          </div>
+                          <p className="line-clamp-2 text-sm">{event.action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <button className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <User className="h-7 w-7" />
               </button>
@@ -175,4 +236,3 @@ export function MainLayout({
     </main>
   );
 }
-

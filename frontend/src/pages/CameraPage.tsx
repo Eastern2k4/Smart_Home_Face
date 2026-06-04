@@ -7,6 +7,15 @@ import { sensorApi } from "@/lib/api/sensors";
 import { faceApi, RecognitionStatus } from "@/lib/api/face";
 import { useEffect, useRef, useState } from "react";
 
+const classificationText: Record<RecognitionStatus["classification"], string> = {
+  idle: "Đang chờ",
+  host: "Chủ nhà",
+  stranger: "Người lạ",
+  no_face: "Không thấy mặt",
+  spoof: "Giả mạo",
+  error: "Lỗi",
+};
+
 export function CameraPage() {
   const store = useStore();
   const streamUrl = useCameraStream();
@@ -26,36 +35,31 @@ export function CameraPage() {
           lastEventRef.current = status.event_id;
 
           if (status.event_type === "host") {
-            setRecognitionNotice(status.event_message || "TRUE - Host recognized");
+            setRecognitionNotice("Đã nhận diện chủ nhà");
             store.setDoorState(true);
             store.addEvent({
               timestamp: new Date().toISOString(),
               type: "door",
               value: 1,
-              action: status.event_message || "Host recognized",
+              action: "Đã nhận diện chủ nhà",
             });
           } else if (status.event_type === "stranger_alert") {
-            setRecognitionNotice(
-              status.event_message ||
-                "ALERT - Stranger detected on scan 5",
-            );
+            setRecognitionNotice("Cảnh báo: phát hiện người lạ ở khung hình thứ 5");
             store.addEvent({
               timestamp: new Date().toISOString(),
               type: "buzzer",
               value: status.stranger_scan_count ?? 5,
-              action:
-                status.event_message ||
-                "Stranger alert: speaker triggered on scan 5",
+              action: "Cảnh báo người lạ: loa đã kích hoạt ở khung hình thứ 5",
             });
           } else if (status.event_type === "spoof_detected") {
             setRecognitionNotice(
-              status.event_message || "Canh bao: phat hien khuon mat gia mao",
+              "Cảnh báo: phát hiện khuôn mặt giả mạo",
             );
             store.addEvent({
               timestamp: new Date().toISOString(),
               type: "buzzer",
               value: 0,
-              action: status.event_message || "Spoofed face detected",
+              action: "Phát hiện khuôn mặt giả mạo",
             });
           }
 
@@ -82,7 +86,7 @@ export function CameraPage() {
       {recognitionNotice && (
         <div
           className={`fixed right-6 top-6 z-50 max-w-[min(460px,calc(100vw-3rem))] rounded-xl border px-5 py-4 text-lg font-semibold shadow-lg ${
-            recognitionNotice.startsWith("TRUE")
+            recognitionNotice.startsWith("Đã")
               ? "border-success/30 bg-success text-white"
               : "border-destructive/30 bg-destructive text-destructive-foreground"
           }`}
@@ -94,11 +98,11 @@ export function CameraPage() {
       <div className="rounded-xl border border-border bg-card p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold">Nhan dien cua ra vao</h2>
+            <h2 className="text-2xl font-bold">Nhận diện cửa ra vào</h2>
             <p className="mt-2 text-lg text-muted-foreground">
               {recognitionStatus?.running
-                ? "Dang chup anh moi 5 giay va so sanh voi database/Hosts"
-                : "Monitor chua chay"}
+                ? "Đang chụp ảnh mỗi 5 giây và so sánh với database/Hosts"
+                : "Bộ giám sát chưa chạy"}
             </p>
           </div>
           <span
@@ -113,24 +117,28 @@ export function CameraPage() {
             }`}
           >
             {recognitionStatus?.door_allowed
-              ? "HOST"
+              ? "CHỦ NHÀ"
               : recognitionStatus?.stranger_alert
-                ? "STRANGER ALERT"
+                ? "CẢNH BÁO NGƯỜI LẠ"
                 : recognitionStatus?.classification === "spoof"
-                  ? "SPOOF"
-                : recognitionStatus?.classification ?? "idle"}
+                  ? "GIẢ MẠO"
+                : recognitionStatus
+                  ? classificationText[recognitionStatus.classification]
+                  : "Đang chờ"}
           </span>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="rounded-xl bg-secondary p-4">
-            <p className="text-sm text-muted-foreground">Ket qua</p>
+            <p className="text-sm text-muted-foreground">Kết quả</p>
             <p className="mt-1 text-xl font-semibold">
-              {recognitionStatus?.classification ?? "idle"}
+              {recognitionStatus
+                ? classificationText[recognitionStatus.classification]
+                : "Đang chờ"}
             </p>
           </div>
           <div className="rounded-xl bg-secondary p-4">
-            <p className="text-sm text-muted-foreground">Do tin cay</p>
+            <p className="text-sm text-muted-foreground">Độ tin cậy</p>
             <p className="mt-1 text-xl font-semibold">
               {recognitionStatus?.confidence != null
                 ? `${recognitionStatus.confidence.toFixed(1)}%`
@@ -138,14 +146,14 @@ export function CameraPage() {
             </p>
           </div>
           <div className="rounded-xl bg-secondary p-4">
-            <p className="text-sm text-muted-foreground">Nguoi la</p>
+            <p className="text-sm text-muted-foreground">Người lạ</p>
             <p className="mt-1 text-xl font-semibold">
               {Math.floor((recognitionStatus?.stranger_duration_seconds ?? 0) / 60)}m{" "}
               {Math.floor((recognitionStatus?.stranger_duration_seconds ?? 0) % 60)}s
             </p>
           </div>
           <div className="rounded-xl bg-secondary p-4">
-            <p className="text-sm text-muted-foreground">Do that khuon mat</p>
+            <p className="text-sm text-muted-foreground">Độ thật khuôn mặt</p>
             <p className="mt-1 text-xl font-semibold">
               {recognitionStatus?.liveness_score != null
                 ? `${(recognitionStatus.liveness_score * 100).toFixed(1)}%`
@@ -153,7 +161,7 @@ export function CameraPage() {
             </p>
           </div>
           <div className="rounded-xl bg-secondary p-4">
-            <p className="text-sm text-muted-foreground">Cap nhat</p>
+            <p className="text-sm text-muted-foreground">Cập nhật</p>
             <p className="mt-1 text-xl font-semibold">
               {recognitionStatus?.updated_at
                 ? new Date(recognitionStatus.updated_at).toLocaleTimeString()
@@ -164,14 +172,14 @@ export function CameraPage() {
 
         {recognitionStatus?.stranger_alert && (
           <p className="mt-5 rounded-xl bg-destructive/10 p-4 text-destructive">
-            Canh bao: nguoi la xuat hien lien tuc tu 5 khung hinh. Anh da duoc luu
-            vao database/Strangers.
+            Cảnh báo: người lạ xuất hiện liên tục từ 5 khung hình. Ảnh đã được lưu
+            vào database/Strangers.
           </p>
         )}
         {recognitionStatus?.classification === "spoof" && (
           <p className="mt-5 rounded-xl bg-destructive/10 p-4 text-destructive">
-            Canh bao: khuon mat khong vuot qua kiem tra chong gia mao. Khong
-            mo cua va khong tinh la nguoi la.
+            Cảnh báo: khuôn mặt không vượt qua kiểm tra chống giả mạo. Không
+            mở cửa và không tính là người lạ.
           </p>
         )}
         {recognitionStatus?.error && (

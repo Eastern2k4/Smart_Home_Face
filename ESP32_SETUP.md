@@ -21,11 +21,13 @@
 ```
 FTDI Module    →    ESP32-CAM
 ─────────────────────────────
-VCC (3.3V)    →    3V3
+VCC (5V)      →    5V
 GND           →    GND
 TX            →    U0R
 RX            →    U0T
 ```
+
+> ⚠️ ESP32-CAM thường reset lặp lại nếu cấp nguồn yếu. Dùng nguồn 5V ổn định, tối thiểu khoảng 1A; nhiều cổng 3.3V trên FTDI không đủ dòng cho camera + Wi-Fi.
 
 ### Kết nối GPIO cho tương lai (Relay/PIR):
 
@@ -208,8 +210,8 @@ curl -O http://192.168.1.102/capture
 ```
 
 ### Cách 3: Web App
-1. Chạy Flask: `python app.py`
-2. Mở: `http://localhost:5000`
+1. Chạy Flask: `python -m src.app`
+2. Mở frontend hoặc API backend trên port `8000`
 3. Tab **ESP32** → Nhập: `http://192.168.1.102/capture`
 4. Nhấn: **Fetch ESP32 Snapshot**
 

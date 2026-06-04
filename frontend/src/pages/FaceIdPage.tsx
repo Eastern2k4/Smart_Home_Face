@@ -33,11 +33,11 @@ export function FaceIdPage() {
   const addHostFace = async () => {
     const name = hostName.trim();
     if (!name) {
-      setMessage("Nhap ten Host truoc khi luu.");
+      setMessage("Nhập tên chủ nhà trước khi lưu.");
       return;
     }
     if (!selectedFile) {
-      setMessage("Chon anh khuon mat Host truoc.");
+      setMessage("Chọn ảnh khuôn mặt chủ nhà trước.");
       return;
     }
     setLoading(true);
@@ -47,16 +47,16 @@ export function FaceIdPage() {
         timestamp: new Date().toISOString(),
         type: "door",
         value: 1,
-        action: `Added Host face '${name}' to Face ID dataset`,
+        action: `Đã thêm khuôn mặt chủ nhà '${name}' vào dữ liệu nhận diện`,
       });
       setSelectedFile(null);
       if (fileRef.current) fileRef.current.value = "";
-      setMessage(`Da luu khuon mat Host '${name}' vao database/Hosts.`);
+      setMessage(`Đã lưu khuôn mặt chủ nhà '${name}' vào database/Hosts.`);
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Khong the luu khuon mat Host. Kiem tra backend Face ID.",
+          : "Không thể lưu khuôn mặt chủ nhà. Kiểm tra backend nhận diện.",
       );
     } finally {
       setLoading(false);
@@ -70,7 +70,7 @@ export function FaceIdPage() {
 
     if (!window.isSecureContext && !isLocalhost) {
       setMessage(
-        "Trinh duyet chan camera khi mo bang IP HTTP. Hay mo frontend bang http://localhost:3000 tren chinh laptop nay.",
+        "Trình duyệt chặn camera khi mở bằng IP HTTP. Hãy mở frontend bằng http://localhost:3000 trên chính laptop này.",
       );
       return;
     }
@@ -85,8 +85,8 @@ export function FaceIdPage() {
     } catch (error) {
       setMessage(
         error instanceof Error
-          ? `Khong the mo camera laptop: ${error.message}`
-          : "Khong the mo camera laptop. Kiem tra quyen truy cap camera.",
+          ? `Không thể mở camera laptop: ${error.message}`
+          : "Không thể mở camera laptop. Kiểm tra quyền truy cập camera.",
       );
     }
   };
@@ -100,13 +100,13 @@ export function FaceIdPage() {
   const captureHostFromWebcam = async () => {
     const name = hostName.trim();
     if (!name) {
-      setMessage("Nhap ten Host truoc khi chup.");
+      setMessage("Nhập tên chủ nhà trước khi chụp.");
       return;
     }
 
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) {
-      setMessage("Camera chua san sang.");
+      setMessage("Camera chưa sẵn sàng.");
       return;
     }
 
@@ -120,22 +120,22 @@ export function FaceIdPage() {
     setLoading(true);
     canvas.toBlob(async (blob) => {
       try {
-        if (!blob) throw new Error("No image data");
-        setMessage("Da chup anh thanh cong. Dang luu vao database/Hosts...");
+        if (!blob) throw new Error("Không có dữ liệu ảnh");
+        setMessage("Đã chụp ảnh thành công. Đang lưu vào database/Hosts...");
         const file = new File([blob], "host-webcam.jpg", { type: "image/jpeg" });
         await faceApi.addHostFace(file, name);
         store.addEvent({
           timestamp: new Date().toISOString(),
           type: "door",
           value: 1,
-          action: `Captured Host face '${name}' to Face ID dataset`,
+          action: `Đã chụp khuôn mặt chủ nhà '${name}' vào dữ liệu nhận diện`,
         });
-        setMessage(`Da chup va luu Host '${name}' vao database/Hosts.`);
+        setMessage(`Đã chụp và lưu chủ nhà '${name}' vào database/Hosts.`);
       } catch (error) {
         setMessage(
           error instanceof Error
             ? error.message
-            : "Khong the luu anh Host tu camera laptop.",
+            : "Không thể lưu ảnh chủ nhà từ camera laptop.",
         );
       } finally {
         setLoading(false);
@@ -146,16 +146,16 @@ export function FaceIdPage() {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.8fr]">
       <div className="rounded-xl border border-border bg-card p-8">
-        <h2 className="text-2xl font-bold">Them Host Face ID</h2>
+        <h2 className="text-2xl font-bold">Thêm chủ nhà nhận diện</h2>
         <p className="mt-2 text-lg text-muted-foreground">
-          Nhap ten bat buoc, roi upload anh hoac chup bang camera may tinh.
-          Anh hop le se duoc luu vao database/Hosts.
+          Nhập tên chủ nhà, rồi tải ảnh lên hoặc chụp bằng camera máy tính.
+          Ảnh hợp lệ sẽ được lưu vào database/Hosts.
         </p>
         <div className="mt-8 grid gap-4">
           <Input
             value={hostName}
             onChange={(event) => setHostName(event.target.value)}
-            placeholder="Ten Host bat buoc"
+            placeholder="Tên chủ nhà bắt buộc"
             className="h-12"
           />
           {webcamActive && (
@@ -177,7 +177,7 @@ export function FaceIdPage() {
               onClick={webcamActive ? stopWebcam : startWebcam}
             >
               <Camera className="mr-2 h-5 w-5" />
-              {webcamActive ? "Tat camera laptop" : "Mo camera laptop"}
+              {webcamActive ? "Tắt camera laptop" : "Mở camera laptop"}
             </Button>
             <Button
               type="button"
@@ -190,7 +190,7 @@ export function FaceIdPage() {
               ) : (
                 <Camera className="mr-2 h-5 w-5" />
               )}
-              Chup mat va luu vao Hosts
+              Chụp mặt và lưu vào danh sách chủ nhà
             </Button>
           </div>
           <button
@@ -200,9 +200,9 @@ export function FaceIdPage() {
           >
             <Upload className="mx-auto mb-3 h-10 w-10 text-primary" />
             <p className="font-semibold">
-              {selectedFile ? selectedFile.name : "Upload anh khuon mat Host"}
+              {selectedFile ? selectedFile.name : "Tải ảnh khuôn mặt chủ nhà lên"}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">JPG hoac PNG</p>
+            <p className="mt-1 text-sm text-muted-foreground">JPG hoặc PNG</p>
           </button>
           <input
             ref={fileRef}
@@ -221,7 +221,7 @@ export function FaceIdPage() {
             ) : (
               <Plus className="mr-2 h-5 w-5" />
             )}
-            Luu Host vao database/Hosts
+            Lưu chủ nhà vào database/Hosts
           </Button>
           {message && (
             <p className="rounded-xl bg-secondary p-4 text-muted-foreground">
@@ -231,9 +231,9 @@ export function FaceIdPage() {
         </div>
       </div>
       <div className="rounded-xl border border-border bg-card p-8">
-        <h2 className="text-2xl font-bold">Trang thai cua</h2>
+        <h2 className="text-2xl font-bold">Trạng thái cửa</h2>
         <p className="mt-2 text-lg text-muted-foreground">
-          {store.doorOpen ? "Cua dang mo" : "Cua dang dong"}
+          {store.doorOpen ? "Cửa đang mở" : "Cửa đang đóng"}
         </p>
         <Button
           className="mt-8 h-14 rounded-2xl px-8 text-lg"
@@ -244,7 +244,7 @@ export function FaceIdPage() {
               .then(() => store.setDoorState(!store.doorOpen))
           }
         >
-          {store.doorOpen ? "Dong cua" : "Mo cua"}
+          {store.doorOpen ? "Đóng cửa" : "Mở cửa"}
         </Button>
       </div>
     </div>

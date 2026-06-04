@@ -23,8 +23,8 @@ WebServer server(SENSOR_HTTP_PORT);
 #define ECHO_KITCHEN_PIN  19
 #define TRIG_WC_PIN       21
 #define ECHO_WC_PIN       22
-#define DHT_LIVING_PIN    23
-#define DHT_BEDROOM_PIN   25
+#define DHT_LIVING_PIN    25
+#define DHT_BEDROOM_PIN   23
 #define DHT_TYPE          DHT11
 #define GAS_PIN           32
 #define SERVO_PIN         26
@@ -35,10 +35,23 @@ WebServer server(SENSOR_HTTP_PORT);
 #define HOUSE_GAS_SPEAKER_PIN  LOA_KHACH
 #define HOUSE_ENV_SPEAKER_SECONDARY_PIN LOA_NGU
 
+// ================= SERVO CONFIG =================
+// For 270-degree servo.
+// 90  = close
+// 270 = open
+#define SERVO_MIN_US       500
+#define SERVO_MAX_US       2400
+#define SERVO_MAX_ANGLE    270
+
+#define DOOR_CLOSE_ANGLE   90
+#define DOOR_OPEN_ANGLE    270
+#define SERVO_STEP_DELAY   20
+
 // Speaker sine-wave PWM config.
 #define SPEAKER_PWM_FREQ       20000
 #define SPEAKER_PWM_RESOLUTION 8
 #define SINE_SAMPLE_COUNT      32
+#define HOUSE_ENV_SPEAKER_PINS_COUNT 2
 
 // ================= OBJECTS =================
 DHT dhtLiving(DHT_LIVING_PIN, DHT_TYPE);
@@ -61,25 +74,32 @@ bool kitchenLightState = false;
 bool bedroomLightState = false;
 bool doorOpenState = false;
 bool doorServoAttached = false;
+
+int currentDoorAngle = DOOR_CLOSE_ANGLE;
+
 bool speakerAlarmEnabled = true;
 bool gasAlarmActive = false;
 bool temperatureAlarmActive = false;
 bool humidityAlarmActive = false;
+
 int gasAlarmThreshold = DEFAULT_GAS_ALARM_THRESHOLD;
 float temperatureAlarmThreshold = DEFAULT_TEMPERATURE_ALARM_THRESHOLD;
 float humidityAlarmThreshold = DEFAULT_HUMIDITY_ALARM_THRESHOLD;
+
 unsigned long lastAlarmCheckMs = 0;
 unsigned long lastBackendRegisterMs = 0;
 unsigned long speakerAlertDurationMs = SPEAKER_ALERT_DURATION_MS;
+
 SpeakerChannel frontDoorSpeaker = {
   "front_door",
   FRONT_DOOR_SPEAKER_PIN,
-  80,
+  100,
   880,
   false,
   nullptr,
   0
 };
+
 SpeakerChannel houseGasSpeaker = {
   "house_gas",
   HOUSE_GAS_SPEAKER_PIN,
@@ -89,11 +109,18 @@ SpeakerChannel houseGasSpeaker = {
   nullptr,
   0
 };
+
+const int HOUSE_ENV_SPEAKER_PINS[HOUSE_ENV_SPEAKER_PINS_COUNT] = {
+  HOUSE_GAS_SPEAKER_PIN,
+  HOUSE_ENV_SPEAKER_SECONDARY_PIN
+};
+
 bool speakersPwmReady = false;
 unsigned long lastFrontDoorSineUpdateUs = 0;
 unsigned long lastHouseGasSineUpdateUs = 0;
 uint8_t frontDoorSineIndex = 0;
 uint8_t houseGasSineIndex = 0;
+
 const uint8_t SINE_TABLE[SINE_SAMPLE_COUNT] = {
   128, 152, 176, 198, 218, 234, 245, 253,
   255, 253, 245, 234, 218, 198, 176, 152,
@@ -101,38 +128,39 @@ const uint8_t SINE_TABLE[SINE_SAMPLE_COUNT] = {
   0, 2, 10, 21, 37, 57, 79, 103
 };
 
+// ================= BACKEND REGISTER =================
 void registerWithBackend() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi not connected, cannot register");
-        return;
-    }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected, cannot register");
+    return;
+  }
 
-    HTTPClient http;
-    String url = "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/sensor";
-    http.begin(url);
-    http.addHeader("Content-Type", "application/json");
+  HTTPClient http;
+  String url = "http://" + String(BACKEND_HOST) + ":" + String(BACKEND_PORT) + "/api/arduino/register/sensor";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
 
-    // Create JSON payload with the sensor node's IP
-    String payload = "{\"ip\":\"" + WiFi.localIP().toString() + "\", \"type\":\"sensor\"}";
-    
-    Serial.print("Registering sensor node at: ");
-    Serial.println(url);
-    Serial.print("Payload: ");
-    Serial.println(payload);
+  String payload = "{\"ip\":\"" + WiFi.localIP().toString() + "\", \"type\":\"sensor\"}";
 
-    int httpCode = http.POST(payload);
-    
-    if (httpCode > 0) {
-        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_CREATED) {
-          Serial.println("✅ Sensor node registered successfully with backend");
-        } else {
-            Serial.printf("❌ Registration failed, HTTP code: %d\n", httpCode);
-        }
+  Serial.print("Registering sensor node at: ");
+  Serial.println(url);
+  Serial.print("Payload: ");
+  Serial.println(payload);
+
+  int httpCode = http.POST(payload);
+
+  if (httpCode > 0) {
+    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_CREATED) {
+      Serial.println("✅ Sensor node registered successfully with backend");
     } else {
-        Serial.printf("❌ Registration error: %s\n", http.errorToString(httpCode).c_str());
+      Serial.printf("❌ Registration failed, HTTP code: %d\n", httpCode);
     }
-    http.end();
-    lastBackendRegisterMs = millis();
+  } else {
+    Serial.printf("❌ Registration error: %s\n", http.errorToString(httpCode).c_str());
+  }
+
+  http.end();
+  lastBackendRegisterMs = millis();
 }
 
 // ================= HELPER =================
@@ -197,13 +225,72 @@ String jsonReason(const char* reason) {
   return reason == nullptr ? "null" : "\"" + String(reason) + "\"";
 }
 
+// ================= SERVO HELPERS =================
+void writeDoorServoAngle(int angle) {
+  angle = constrain(angle, 0, SERVO_MAX_ANGLE);
+
+  int pulse = map(
+    angle,
+    0,
+    SERVO_MAX_ANGLE,
+    SERVO_MIN_US,
+    SERVO_MAX_US
+  );
+
+  doorServo.writeMicroseconds(pulse);
+
+  Serial.print("Door servo angle: ");
+  Serial.print(angle);
+  Serial.print(" | pulse: ");
+  Serial.println(pulse);
+}
+
+void moveDoorServoSmooth(int targetAngle) {
+  targetAngle = constrain(targetAngle, 0, SERVO_MAX_ANGLE);
+
+  if (currentDoorAngle < targetAngle) {
+    for (int pos = currentDoorAngle; pos <= targetAngle; pos++) {
+      writeDoorServoAngle(pos);
+      delay(SERVO_STEP_DELAY);
+    }
+  } else {
+    for (int pos = currentDoorAngle; pos >= targetAngle; pos--) {
+      writeDoorServoAngle(pos);
+      delay(SERVO_STEP_DELAY);
+    }
+  }
+
+  currentDoorAngle = targetAngle;
+}
+
+void ensureDoorServoAttached() {
+  if (doorServoAttached) {
+    return;
+  }
+
+  ESP32PWM::allocateTimer(0);
+  doorServo.setPeriodHertz(50);
+  doorServo.attach(SERVO_PIN, SERVO_MIN_US, SERVO_MAX_US);
+
+  currentDoorAngle = DOOR_CLOSE_ANGLE;
+  writeDoorServoAngle(DOOR_CLOSE_ANGLE);
+
+  doorServoAttached = true;
+  delay(200);
+}
+
+// ================= SPEAKER HELPERS =================
 void configureSpeakerPwm() {
   if (speakersPwmReady) {
     return;
   }
+
   ledcAttach(frontDoorSpeaker.pin, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcAttach(houseGasSpeaker.pin, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcAttach(HOUSE_ENV_SPEAKER_SECONDARY_PIN, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+    ledcAttach(HOUSE_ENV_SPEAKER_PINS[i], SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+    ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], 0);
+  }
+
   speakersPwmReady = true;
 }
 
@@ -219,27 +306,36 @@ bool speakerIsActive(SpeakerChannel &channel) {
     channel.reason = nullptr;
     channel.activeUntilMs = 0;
   }
+
   return channel.active;
 }
 
 void writeSpeakerChannel(SpeakerChannel &channel, uint8_t sineIndex) {
   configureSpeakerPwm();
+
   int duty = speakerIsActive(channel) ? sineDutyForVolume(channel.volume, sineIndex) : 0;
-  ledcWrite(channel.pin, duty);
+
   if (String(channel.id) == "house_gas") {
-    ledcWrite(HOUSE_ENV_SPEAKER_SECONDARY_PIN, duty);
+    for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+      ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], duty);
+    }
+    return;
   }
+
+  ledcWrite(channel.pin, duty);
 }
 
 void updateSpeakerWaveforms() {
   configureSpeakerPwm();
+
   bool frontActive = speakerIsActive(frontDoorSpeaker);
   bool gasActive = speakerIsActive(houseGasSpeaker);
 
   if (!frontActive && !gasActive) {
     ledcWrite(frontDoorSpeaker.pin, 0);
-    ledcWrite(houseGasSpeaker.pin, 0);
-    ledcWrite(HOUSE_ENV_SPEAKER_SECONDARY_PIN, 0);
+    for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+      ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], 0);
+    }
     return;
   }
 
@@ -248,6 +344,7 @@ void updateSpeakerWaveforms() {
   if (frontActive) {
     unsigned long frontIntervalUs =
       1000000UL / max(1, frontDoorSpeaker.frequency * SINE_SAMPLE_COUNT);
+
     if (nowUs - lastFrontDoorSineUpdateUs >= frontIntervalUs) {
       lastFrontDoorSineUpdateUs = nowUs;
       frontDoorSineIndex = (frontDoorSineIndex + 1) % SINE_SAMPLE_COUNT;
@@ -260,14 +357,16 @@ void updateSpeakerWaveforms() {
   if (gasActive) {
     unsigned long gasIntervalUs =
       1000000UL / max(1, houseGasSpeaker.frequency * SINE_SAMPLE_COUNT);
+
     if (nowUs - lastHouseGasSineUpdateUs >= gasIntervalUs) {
       lastHouseGasSineUpdateUs = nowUs;
       houseGasSineIndex = (houseGasSineIndex + 1) % SINE_SAMPLE_COUNT;
       writeSpeakerChannel(houseGasSpeaker, houseGasSineIndex);
     }
   } else {
-    ledcWrite(houseGasSpeaker.pin, 0);
-    ledcWrite(HOUSE_ENV_SPEAKER_SECONDARY_PIN, 0);
+    for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+      ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], 0);
+    }
   }
 }
 
@@ -280,36 +379,58 @@ void triggerTimedSpeaker(SpeakerChannel &channel, const char* reason) {
 
 void forceAllSpeakersOff() {
   pinMode(frontDoorSpeaker.pin, OUTPUT);
-  pinMode(houseGasSpeaker.pin, OUTPUT);
-  pinMode(HOUSE_ENV_SPEAKER_SECONDARY_PIN, OUTPUT);
+  for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+    pinMode(HOUSE_ENV_SPEAKER_PINS[i], OUTPUT);
+  }
+
   frontDoorSpeaker.active = false;
   frontDoorSpeaker.reason = nullptr;
   frontDoorSpeaker.activeUntilMs = 0;
+
   houseGasSpeaker.active = false;
   houseGasSpeaker.reason = nullptr;
   houseGasSpeaker.activeUntilMs = 0;
+
   digitalWrite(frontDoorSpeaker.pin, SPEAKER_INACTIVE_LEVEL);
-  digitalWrite(houseGasSpeaker.pin, SPEAKER_INACTIVE_LEVEL);
-  digitalWrite(HOUSE_ENV_SPEAKER_SECONDARY_PIN, SPEAKER_INACTIVE_LEVEL);
+  for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+    digitalWrite(HOUSE_ENV_SPEAKER_PINS[i], SPEAKER_INACTIVE_LEVEL);
+  }
 }
 
-bool thresholdExceeded(bool currentlyActive, float firstValue, float secondValue, float threshold, float hysteresis) {
+// ================= ALARM LOGIC =================
+bool thresholdExceeded(
+  bool currentlyActive,
+  float firstValue,
+  float secondValue,
+  float threshold,
+  float hysteresis
+) {
   float limit = currentlyActive ? threshold - hysteresis : threshold;
-  bool firstExceeded = !isnan(firstValue) && (currentlyActive ? firstValue >= limit : firstValue > limit);
-  bool secondExceeded = !isnan(secondValue) && (currentlyActive ? secondValue >= limit : secondValue > limit);
+
+  bool firstExceeded =
+    !isnan(firstValue) &&
+    (currentlyActive ? firstValue >= limit : firstValue > limit);
+
+  bool secondExceeded =
+    !isnan(secondValue) &&
+    (currentlyActive ? secondValue >= limit : secondValue > limit);
+
   return firstExceeded || secondExceeded;
 }
 
 void updateEnvironmentAlarm() {
   int gasValue = analogRead(GAS_PIN);
+
   float livingTemp = dhtLiving.readTemperature();
   float livingHum = dhtLiving.readHumidity();
+
   float bedroomTemp = dhtBedroom.readTemperature();
   float bedroomHum = dhtBedroom.readHumidity();
 
   gasAlarmActive = gasAlarmActive
     ? gasValue >= gasAlarmThreshold - GAS_ALARM_HYSTERESIS
     : gasValue > gasAlarmThreshold;
+
   temperatureAlarmActive = thresholdExceeded(
     temperatureAlarmActive,
     livingTemp,
@@ -317,6 +438,7 @@ void updateEnvironmentAlarm() {
     temperatureAlarmThreshold,
     TEMPERATURE_ALARM_HYSTERESIS
   );
+
   humidityAlarmActive = thresholdExceeded(
     humidityAlarmActive,
     livingHum,
@@ -327,6 +449,7 @@ void updateEnvironmentAlarm() {
 
   if (speakerAlarmEnabled && (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive)) {
     houseGasSpeaker.active = true;
+
     if (gasAlarmActive) {
       houseGasSpeaker.reason = "gas_threshold_exceeded";
     } else if (temperatureAlarmActive) {
@@ -334,11 +457,16 @@ void updateEnvironmentAlarm() {
     } else {
       houseGasSpeaker.reason = "humidity_threshold_exceeded";
     }
+
     houseGasSpeaker.activeUntilMs = 0;
-  } else if (houseGasSpeaker.reason != nullptr && (
-             String(houseGasSpeaker.reason) == "gas_threshold_exceeded" ||
-             String(houseGasSpeaker.reason) == "temperature_threshold_exceeded" ||
-             String(houseGasSpeaker.reason) == "humidity_threshold_exceeded")) {
+  } else if (
+    houseGasSpeaker.reason != nullptr &&
+    (
+      String(houseGasSpeaker.reason) == "gas_threshold_exceeded" ||
+      String(houseGasSpeaker.reason) == "temperature_threshold_exceeded" ||
+      String(houseGasSpeaker.reason) == "humidity_threshold_exceeded"
+    )
+  ) {
     houseGasSpeaker.active = false;
     houseGasSpeaker.reason = nullptr;
     houseGasSpeaker.activeUntilMs = 0;
@@ -347,28 +475,12 @@ void updateEnvironmentAlarm() {
   updateSpeakerWaveforms();
 }
 
-void ensureDoorServoAttached() {
-  if (doorServoAttached) {
-    return;
-  }
-
-  ESP32PWM::allocateTimer(0);
-  doorServo.setPeriodHertz(50);
-  doorServo.attach(SERVO_PIN, 500, 2400);
-  doorServo.write(doorOpenState ? 180 : 90);
-  doorServoAttached = true;
-  delay(200);
-}
-
 // ================= API HANDLERS =================
-
-// Test server
 void handleRoot() {
   sendCORS();
   server.send(200, "application/json", "{\"message\":\"ESP32 Sensor Node is running\"}");
 }
 
-// GET /api/sensors
 void handleSensors() {
   sendCORS();
 
@@ -411,39 +523,46 @@ void handleSensors() {
   server.send(200, "application/json", json);
 }
 
-// GET /api/devices
 void handleDevices() {
   sendCORS();
 
   String json = "{";
+
   json += "\"wcLight\":" + String(wcLightState ? "true" : "false") + ",";
   json += "\"kitchenLight\":" + String(kitchenLightState ? "true" : "false") + ",";
   json += "\"bedroomLight\":" + String(bedroomLightState ? "true" : "false") + ",";
   json += "\"doorOpen\":" + String(doorOpenState ? "true" : "false") + ",";
+  json += "\"doorAngle\":" + String(currentDoorAngle) + ",";
+
   json += "\"speakers\":{";
+
   json += "\"front_door\":{";
   json += "\"active\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false") + ",";
   json += "\"volume\":" + String(frontDoorSpeaker.volume) + ",";
   json += "\"reason\":" + jsonReason(frontDoorSpeaker.reason);
   json += "},";
+
   json += "\"house_gas\":{";
   json += "\"active\":" + String(speakerIsActive(houseGasSpeaker) ? "true" : "false") + ",";
   json += "\"volume\":" + String(houseGasSpeaker.volume) + ",";
   json += "\"reason\":" + jsonReason(houseGasSpeaker.reason);
   json += "}";
+
   json += "},";
+
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
   json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
   json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false") + ",";
   json += "\"stranger\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false");
   json += "}";
+
   json += "}";
 
   server.send(200, "application/json", json);
 }
 
-// WC light
+// ================= LIGHT HANDLERS =================
 void handleWcLightOn() {
   sendCORS();
   wcLightState = true;
@@ -458,7 +577,6 @@ void handleWcLightOff() {
   server.send(200, "application/json", "{\"success\":true,\"wcLight\":false}");
 }
 
-// Kitchen light
 void handleKitchenLightOn() {
   sendCORS();
   kitchenLightState = true;
@@ -473,7 +591,6 @@ void handleKitchenLightOff() {
   server.send(200, "application/json", "{\"success\":true,\"kitchenLight\":false}");
 }
 
-// Bedroom light
 void handleBedroomLightOn() {
   sendCORS();
   bedroomLightState = true;
@@ -488,86 +605,108 @@ void handleBedroomLightOff() {
   server.send(200, "application/json", "{\"success\":true,\"bedroomLight\":false}");
 }
 
+// ================= DOOR HANDLERS =================
 void handleDoorOpen() {
   sendCORS();
   ensureDoorServoAttached();
 
-  // quay từ 90 -> 180 chậm
-  for (int pos = 90; pos <= 180; pos++) {
-    doorServo.write(pos);
-    delay(20); // càng lớn thì quay càng chậm
-  }
+  moveDoorServoSmooth(DOOR_OPEN_ANGLE);
 
   doorOpenState = true;
-  server.send(200, "application/json", "{\"success\":true,\"doorOpen\":true}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"doorOpen\":true,\"angle\":270}"
+  );
 }
 
 void handleDoorClose() {
   sendCORS();
   ensureDoorServoAttached();
 
-  // quay từ 180 -> 90 doorServo.write(90); 
-  for (int pos = 180; pos >= 90; pos--) {
-    doorServo.write(pos);
-    delay(20); // càng lớn thì quay càng chậm
-  }
+  moveDoorServoSmooth(DOOR_CLOSE_ANGLE);
 
   doorOpenState = false;
-  server.send(200, "application/json", "{\"success\":true,\"doorOpen\":false}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"doorOpen\":false,\"angle\":90}"
+  );
 }
 
-// GET /api/speaker/settings
+// ================= SPEAKER API =================
 void handleSpeakerSettings() {
   sendCORS();
 
   String json = "{";
+
   json += "\"enabled\":" + String(speakerAlarmEnabled ? "true" : "false") + ",";
   json += "\"gasThreshold\":" + String(gasAlarmThreshold) + ",";
+
   json += "\"thresholds\":{";
   json += "\"gas\":" + String(gasAlarmThreshold) + ",";
   json += "\"temperature\":" + String(temperatureAlarmThreshold) + ",";
   json += "\"humidity\":" + String(humidityAlarmThreshold);
   json += "},";
+
   json += "\"alertDurationMs\":" + String(speakerAlertDurationMs) + ",";
   json += "\"waveform\":\"sine\",";
+
   json += "\"speakers\":{";
+
   json += "\"front_door\":{";
   json += "\"active\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false") + ",";
   json += "\"volume\":" + String(frontDoorSpeaker.volume) + ",";
   json += "\"reason\":" + jsonReason(frontDoorSpeaker.reason);
   json += "},";
+
   json += "\"house_gas\":{";
   json += "\"active\":" + String(speakerIsActive(houseGasSpeaker) ? "true" : "false") + ",";
   json += "\"volume\":" + String(houseGasSpeaker.volume) + ",";
   json += "\"reason\":" + jsonReason(houseGasSpeaker.reason);
   json += "}";
+
   json += "},";
+
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
   json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
   json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false") + ",";
   json += "\"stranger\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false");
   json += "}";
+
   json += "}";
 
   server.send(200, "application/json", json);
 }
 
-// GET /api/speaker/settings/update?enabled=true&gas=500&temperature=35&humidity=80
 void handleSpeakerSettingsUpdate() {
   sendCORS();
 
-  if (!server.hasArg("enabled") && !server.hasArg("gas") &&
-      !server.hasArg("temperature") && !server.hasArg("humidity")) {
+  if (
+    !server.hasArg("enabled") &&
+    !server.hasArg("gas") &&
+    !server.hasArg("temperature") &&
+    !server.hasArg("humidity")
+  ) {
     server.send(400, "application/json", "{\"error\":\"Missing speaker settings\"}");
     return;
   }
 
-  int newGasThreshold = server.hasArg("gas") ? server.arg("gas").toInt() : gasAlarmThreshold;
-  float newTemperatureThreshold = server.hasArg("temperature") ? server.arg("temperature").toFloat() : temperatureAlarmThreshold;
-  float newHumidityThreshold = server.hasArg("humidity") ? server.arg("humidity").toFloat() : humidityAlarmThreshold;
+  int newGasThreshold =
+    server.hasArg("gas") ? server.arg("gas").toInt() : gasAlarmThreshold;
 
-  if (newGasThreshold < 0 || newTemperatureThreshold <= 0 || newHumidityThreshold <= 0) {
+  float newTemperatureThreshold =
+    server.hasArg("temperature") ? server.arg("temperature").toFloat() : temperatureAlarmThreshold;
+
+  float newHumidityThreshold =
+    server.hasArg("humidity") ? server.arg("humidity").toFloat() : humidityAlarmThreshold;
+
+  if (
+    newGasThreshold < 0 ||
+    newTemperatureThreshold <= 0 ||
+    newHumidityThreshold <= 0
+  ) {
     server.send(400, "application/json", "{\"error\":\"Invalid speaker thresholds\"}");
     return;
   }
@@ -575,9 +714,11 @@ void handleSpeakerSettingsUpdate() {
   if (server.hasArg("enabled")) {
     speakerAlarmEnabled = server.arg("enabled") == "true";
   }
+
   gasAlarmThreshold = newGasThreshold;
   temperatureAlarmThreshold = newTemperatureThreshold;
   humidityAlarmThreshold = newHumidityThreshold;
+
   updateEnvironmentAlarm();
   handleSpeakerSettings();
 }
@@ -585,34 +726,46 @@ void handleSpeakerSettingsUpdate() {
 void handleFrontDoorSpeakerAlert() {
   sendCORS();
   triggerTimedSpeaker(frontDoorSpeaker, "stranger_5_frames");
-  server.send(200, "application/json", "{\"success\":true,\"target\":\"front_door\",\"reason\":\"stranger_5_frames\"}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"target\":\"front_door\",\"reason\":\"stranger_5_frames\"}"
+  );
 }
 
 void handleHouseGasSpeakerAlert() {
   sendCORS();
   triggerTimedSpeaker(houseGasSpeaker, "manual_test");
-  server.send(200, "application/json", "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\"}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\"}"
+  );
 }
 
-// GET /api/speaker/audio/update?frontVolume=80&houseGasVolume=75&duration=5000&gas=500&temperature=35&humidity=80
 void handleSpeakerAudioUpdate() {
   sendCORS();
 
   if (server.hasArg("frontVolume")) {
     frontDoorSpeaker.volume = constrain(server.arg("frontVolume").toInt(), 0, 100);
   }
+
   if (server.hasArg("houseGasVolume")) {
     houseGasSpeaker.volume = constrain(server.arg("houseGasVolume").toInt(), 0, 100);
   }
+
   if (server.hasArg("duration")) {
     speakerAlertDurationMs = constrain(server.arg("duration").toInt(), 500, 30000);
   }
+
   if (server.hasArg("gas")) {
-    gasAlarmThreshold = max(0, server.arg("gas").toInt());
+    gasAlarmThreshold = max(0L, server.arg("gas").toInt());
   }
+
   if (server.hasArg("temperature")) {
     temperatureAlarmThreshold = max(1.0f, server.arg("temperature").toFloat());
   }
+
   if (server.hasArg("humidity")) {
     humidityAlarmThreshold = max(1.0f, server.arg("humidity").toFloat());
   }
@@ -624,26 +777,36 @@ void handleSpeakerAudioUpdate() {
 void handleFrontDoorSpeakerTest() {
   sendCORS();
   triggerTimedSpeaker(frontDoorSpeaker, "manual_test");
-  server.send(200, "application/json", "{\"success\":true,\"target\":\"front_door\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"target\":\"front_door\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}"
+  );
 }
 
 void handleHouseGasSpeakerTest() {
   sendCORS();
   triggerTimedSpeaker(houseGasSpeaker, "manual_test");
-  server.send(200, "application/json", "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}");
+  server.send(
+    200,
+    "application/json",
+    "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}"
+  );
 }
 
-// POST /api/speaker/volume?speakerId=1&volume=50
 void handleSpeakerVolume() {
   sendCORS();
+
   if (server.hasArg("speakerId") && server.hasArg("volume")) {
     int id = server.arg("speakerId").toInt();
     int vol = server.arg("volume").toInt();
+
     if (id == 1) {
       frontDoorSpeaker.volume = constrain(vol, 0, 100);
     } else if (id == 2) {
       houseGasSpeaker.volume = constrain(vol, 0, 100);
     }
+
     server.send(200, "application/json", "{\"success\":true}");
   } else {
     server.send(400, "application/json", "{\"error\":\"Missing speakerId or volume\"}");
@@ -654,6 +817,7 @@ void handleSpeakerVolume() {
 void setup() {
   Serial.begin(115200);
   delay(100);
+
   printResetReason();
   forceAllSpeakersOff();
 
@@ -661,7 +825,7 @@ void setup() {
   dhtLiving.begin();
   dhtBedroom.begin();
 
-  // Den
+  // Lights
   pinMode(LED_WC_PIN, OUTPUT);
   pinMode(LED_KITCHEN_PIN, OUTPUT);
   pinMode(LED_BEDROOM_PIN, OUTPUT);
@@ -670,7 +834,7 @@ void setup() {
   digitalWrite(LED_KITCHEN_PIN, LOW);
   digitalWrite(LED_BEDROOM_PIN, LOW);
 
-  // Sieu am
+  // Ultrasonic
   pinMode(TRIG_KITCHEN_PIN, OUTPUT);
   pinMode(ECHO_KITCHEN_PIN, INPUT);
 
@@ -679,6 +843,9 @@ void setup() {
 
   // Gas
   pinMode(GAS_PIN, INPUT);
+
+  // Servo starts closed
+  ensureDoorServoAttached();
 
   // Speakers stay off after upload/reset until an alarm is triggered.
   forceAllSpeakersOff();
@@ -720,12 +887,15 @@ void setup() {
 
   server.on("/api/speaker/settings", HTTP_GET, handleSpeakerSettings);
   server.on("/api/speaker/settings/update", HTTP_GET, handleSpeakerSettingsUpdate);
+
   server.on("/api/speaker/alert", HTTP_GET, handleFrontDoorSpeakerAlert);
   server.on("/api/speaker/alert/front-door", HTTP_GET, handleFrontDoorSpeakerAlert);
   server.on("/api/speaker/alert/house-gas", HTTP_GET, handleHouseGasSpeakerAlert);
+
   server.on("/api/speaker/audio/update", HTTP_GET, handleSpeakerAudioUpdate);
   server.on("/api/speaker/test/front-door", HTTP_GET, handleFrontDoorSpeakerTest);
   server.on("/api/speaker/test/house-gas", HTTP_GET, handleHouseGasSpeakerTest);
+
   server.on("/api/speaker/volume", HTTP_POST, handleSpeakerVolume);
 
   server.begin();
@@ -735,14 +905,19 @@ void setup() {
 // ================= LOOP =================
 void loop() {
   server.handleClient();
-  updateSpeakerWaveforms(); // CHÚ Ý: Phải gọi liên tục để tạo sóng Sin mượt
 
-  if (WiFi.status() == WL_CONNECTED &&
-      millis() - lastBackendRegisterMs >= BACKEND_REGISTER_INTERVAL_MS) {
+  // Must be called continuously to generate smooth sine wave.
+  updateSpeakerWaveforms();
+
+  if (
+    WiFi.status() == WL_CONNECTED &&
+    millis() - lastBackendRegisterMs >= BACKEND_REGISTER_INTERVAL_MS
+  ) {
     registerWithBackend();
   }
 
   unsigned long now = millis();
+
   if (now - lastAlarmCheckMs >= ALARM_CHECK_INTERVAL_MS) {
     lastAlarmCheckMs = now;
     updateEnvironmentAlarm();

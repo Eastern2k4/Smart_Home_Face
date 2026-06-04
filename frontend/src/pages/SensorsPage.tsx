@@ -30,7 +30,7 @@ export function SensorsPage() {
   const bedroom = store.sensors.bedroom;
 
   const formatNumber = (value: number | null, digits = 1) =>
-    value === null ? "N/A" : value.toFixed(digits);
+    value === null ? "Không có" : value.toFixed(digits);
 
   const distanceChartData = useMemo(() => {
     const wc = store.stats.wcDistances;
@@ -95,7 +95,9 @@ export function SensorsPage() {
         <StatCard
           title="Cảm biến WC"
           value={
-            store.sensors.wc.distance === -1 ? "Out" : store.sensors.wc.distance
+            store.sensors.wc.distance === -1
+              ? "Ngoài phạm vi"
+              : store.sensors.wc.distance
           }
           unit={store.sensors.wc.distance === -1 ? undefined : "cm"}
           icon={Gauge}
@@ -104,7 +106,7 @@ export function SensorsPage() {
           title="Cảm biến bếp"
           value={
             store.sensors.kitchen.distance === -1
-              ? "Out"
+              ? "Ngoài phạm vi"
               : store.sensors.kitchen.distance
           }
           unit={store.sensors.kitchen.distance === -1 ? undefined : "cm"}
@@ -114,9 +116,9 @@ export function SensorsPage() {
       <div className="rounded-xl border border-border bg-card p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold">Dieu khien cua</h2>
+            <h2 className="text-2xl font-bold">Điều khiển cửa</h2>
             <p className="mt-2 text-lg text-muted-foreground">
-              {store.doorOpen ? "Cua dang mo" : "Cua dang dong"}
+              {store.doorOpen ? "Cửa đang mở" : "Cửa đang đóng"}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -128,7 +130,7 @@ export function SensorsPage() {
               disabled={store.doorOpen}
             >
               <DoorOpen className="mr-2 h-5 w-5" />
-              Mo cua
+              Mở cửa
             </Button>
             <Button
               className="h-12 px-6"
@@ -139,7 +141,7 @@ export function SensorsPage() {
               disabled={!store.doorOpen}
             >
               <DoorClosed className="mr-2 h-5 w-5" />
-              Dong cua
+              Đóng cửa
             </Button>
           </div>
         </div>

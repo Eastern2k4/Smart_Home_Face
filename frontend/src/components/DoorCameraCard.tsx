@@ -36,22 +36,22 @@ export function DoorCameraCard({
           <div className="flex justify-center bg-black py-6">
             <img
               src={streamUrl}
-              alt="ESP32 Stream"
+              alt="Luồng camera ESP32"
               className="aspect-square w-[420px] object-contain rounded-xl bg-black"
             />
           </div>
         ) : (
           <div className="flex h-[360px] items-center justify-center text-muted-foreground">
-            Loading camera stream...
+            Đang tải luồng camera...
           </div>
         )}
       </div>
       <div className="flex items-center gap-3 border-t border-border px-6 py-4">
         <span className="rounded bg-background px-3 py-1 text-xs font-bold">
-          LIVE
+          TRỰC TIẾP
         </span>
         <span className="rounded bg-background px-3 py-1 text-xs font-bold">
-          {doorOpen ? "DOOR OPEN" : "DOOR CLOSED"}
+          {doorOpen ? "CỬA ĐANG MỞ" : "CỬA ĐANG ĐÓNG"}
         </span>
       </div>
     </div>

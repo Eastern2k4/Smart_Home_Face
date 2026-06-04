@@ -23,6 +23,17 @@ type SpeakerSettings = {
   speakers?: Record<SpeakerTarget, SpeakerState>;
 };
 
+const reasonText = (reason?: string | null) => {
+  const labels: Record<string, string> = {
+    stranger_5_frames: "Người lạ đủ 5 khung hình",
+    gas_threshold_exceeded: "Khí gas vượt ngưỡng",
+    temperature_threshold_exceeded: "Nhiệt độ vượt ngưỡng",
+    humidity_threshold_exceeded: "Độ ẩm vượt ngưỡng",
+    manual_test: "Đang kiểm tra thủ công",
+  };
+  return reason ? labels[reason] ?? reason : "Không có";
+};
+
 const speakerCards: Array<{
   target: SpeakerTarget;
   title: string;
@@ -31,25 +42,25 @@ const speakerCards: Array<{
 }> = [
   {
     target: "front_door",
-    title: "Loa canh bao cua truoc",
-    purpose: "Backend kich hoat khi nhan dien nguoi la du 5 khung hinh.",
+    title: "Loa cảnh báo cửa trước",
+    purpose: "Backend kích hoạt khi nhận diện người lạ đủ 5 khung hình.",
     pin: "GPIO27",
   },
   {
     target: "house_gas",
-    title: "Loa canh bao moi truong",
+    title: "Loa cảnh báo môi trường",
     purpose:
-      "ESP32 Sensor Node kich hoat cuc bo khi khi gas, nhiet do hoac do am vuot nguong.",
+      "ESP32 Sensor Node kích hoạt cục bộ khi khí gas, nhiệt độ hoặc độ ẩm vượt ngưỡng.",
     pin: "GPIO14 + GPIO13",
   },
 ];
 
 export function SpeakersPage() {
-  const [frontVolume, setFrontVolume] = useState(80);
+  const [frontVolume, setFrontVolume] = useState(100);
   const [houseGasVolume, setHouseGasVolume] = useState(75);
   const [duration, setDuration] = useState(5000);
   const [gasThreshold, setGasThreshold] = useState(500);
-  const [temperatureThreshold, setTemperatureThreshold] = useState(35);
+  const [temperatureThreshold, setTemperatureThreshold] = useState(50);
   const [humidityThreshold, setHumidityThreshold] = useState(80);
   const [speakerState, setSpeakerState] = useState<
     Partial<Record<SpeakerTarget, SpeakerState>>
@@ -67,19 +78,19 @@ export function SpeakersPage() {
         if (!mounted) return;
         const frontDoor = settings.speakers?.front_door;
         const houseGas = settings.speakers?.house_gas;
-        setFrontVolume(frontDoor?.volume ?? 80);
+        setFrontVolume(frontDoor?.volume ?? 100);
         setHouseGasVolume(houseGas?.volume ?? 75);
         setDuration(settings.alertDurationMs ?? 5000);
         const loadedGasThreshold =
           settings.thresholds?.gas ?? settings.gasThreshold ?? 500;
         setGasThreshold(loadedGasThreshold);
         setStoreGasThreshold(loadedGasThreshold);
-        setTemperatureThreshold(settings.thresholds?.temperature ?? 35);
+        setTemperatureThreshold(settings.thresholds?.temperature ?? 50);
         setHumidityThreshold(settings.thresholds?.humidity ?? 80);
         setSpeakerState(settings.speakers ?? {});
       })
       .catch(() => {
-        if (mounted) setMessage("Chua ket noi duoc ESP32 sensor.");
+        if (mounted) setMessage("Chưa kết nối được ESP32 sensor.");
       });
 
     return () => {
@@ -101,9 +112,11 @@ export function SpeakersPage() {
       });
       setSpeakerState(settings.speakers ?? {});
       setStoreGasThreshold(gasThreshold);
-      setMessage("Da luu cau hinh loa va nguong canh bao.");
+      setMessage("Đã lưu cấu hình loa và ngưỡng cảnh báo.");
     } catch {
-      setMessage("Khong luu duoc cau hinh loa. Kiem tra backend va ESP32 sensor.");
+      setMessage(
+        "Không lưu được cấu hình loa. Kiểm tra backend và ESP32 sensor.",
+      );
     } finally {
       setLoading(false);
     }
@@ -115,20 +128,18 @@ export function SpeakersPage() {
       await sensorApi.testSpeaker(target);
       setMessage(
         target === "front_door"
-          ? "Dang test loa front_door tren GPIO27."
-          : "Dang test loa house_gas tren GPIO14 va GPIO13.",
+          ? "Đang kiểm tra loa cửa trước trên GPIO27."
+          : "Đang kiểm tra loa môi trường trên GPIO14 và GPIO13.",
       );
     } catch {
-      setMessage("Khong test duoc loa. Kiem tra ESP32 sensor.");
+      setMessage("Không kiểm tra được loa. Kiểm tra ESP32 sensor.");
     }
   };
 
   const volumeFor = (target: SpeakerTarget) =>
     target === "front_door" ? frontVolume : houseGasVolume;
   const setVolumeFor = (target: SpeakerTarget, value: number) =>
-    target === "front_door"
-      ? setFrontVolume(value)
-      : setHouseGasVolume(value);
+    target === "front_door" ? setFrontVolume(value) : setHouseGasVolume(value);
 
   return (
     <div className="space-y-6">
@@ -161,17 +172,17 @@ export function SpeakersPage() {
 
               <div className="mt-6 grid gap-3 text-base text-muted-foreground">
                 <div className="flex justify-between">
-                  <span>Trang thai</span>
-                  <span>{state?.active ? "Dang bat" : "Dang tat"}</span>
+                  <span>Trạng thái</span>
+                  <span>{state?.active ? "Đang bật" : "Đang tắt"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Ly do</span>
-                  <span>{state?.reason ?? "none"}</span>
+                  <span>Lý do</span>
+                  <span>{reasonText(state?.reason)}</span>
                 </div>
               </div>
 
               <div className="mt-8 flex justify-between text-lg">
-                <span>Am luong</span>
+                <span>Âm lượng</span>
                 <span>{volumeFor(speaker.target)}%</span>
               </div>
               <Slider
@@ -191,21 +202,22 @@ export function SpeakersPage() {
           <div className="flex items-center gap-3">
             <AudioWaveform className="size-6 text-primary" />
             <div>
-              <h3 className="text-2xl font-bold">Speaker Timing</h3>
+              <h3 className="text-2xl font-bold">Thời lượng loa</h3>
               <p className="mt-1 text-lg text-muted-foreground">
-                Canh bao cua truoc co thoi luong. Canh bao moi truong bat khi gia tri vuot nguong.
+                Cảnh báo cửa trước có thời lượng. Cảnh báo môi trường bật khi
+                giá trị vượt ngưỡng.
               </p>
             </div>
           </div>
           <Button onClick={saveSettings} disabled={loading}>
             <Save className="mr-2 size-4" />
-            Luu
+            Lưu
           </Button>
         </div>
 
         <div className="mt-8">
           <div className="flex justify-between text-lg">
-            <span>Thoi luong canh bao</span>
+            <span>Thời lượng cảnh báo</span>
             <span>{(duration / 1000).toFixed(1)}s</span>
           </div>
           <Slider
@@ -221,13 +233,13 @@ export function SpeakersPage() {
         <div className="mt-8 grid gap-7">
           <div>
             <div className="flex justify-between text-lg">
-              <span>Nguong khi gas</span>
+              <span>Ngưỡng khí gas</span>
               <span>{gasThreshold}</span>
             </div>
             <Slider
               className="mt-4"
               min={0}
-              max={2000}
+              max={5000}
               step={10}
               value={[gasThreshold]}
               onValueChange={([value]) => setGasThreshold(value)}
@@ -236,13 +248,13 @@ export function SpeakersPage() {
 
           <div>
             <div className="flex justify-between text-lg">
-              <span>Nguong nhiet do</span>
+              <span>Ngưỡng nhiệt độ</span>
               <span>{temperatureThreshold}°C</span>
             </div>
             <Slider
               className="mt-4"
               min={20}
-              max={60}
+              max={80}
               step={1}
               value={[temperatureThreshold]}
               onValueChange={([value]) => setTemperatureThreshold(value)}
@@ -251,7 +263,7 @@ export function SpeakersPage() {
 
           <div>
             <div className="flex justify-between text-lg">
-              <span>Nguong do am</span>
+              <span>Ngưỡng độ ẩm</span>
               <span>{humidityThreshold}%</span>
             </div>
             <Slider

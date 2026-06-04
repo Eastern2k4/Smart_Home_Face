@@ -15,9 +15,8 @@ export function OverviewPage() {
   const livingRoom = store.sensors.livingRoom;
   const bedroom = store.sensors.bedroom;
   const gas = store.sensors.gas;
-
   const formatNumber = (value: number | null, digits = 1) =>
-    value === null ? "N/A" : value.toFixed(digits);
+    value === null ? "Không có" : value.toFixed(digits);
 
   return (
     <div className="space-y-8">

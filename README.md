@@ -101,7 +101,7 @@ URL backend mong đợi:
 http://172.16.3.201:8000
 ```
 
-`app.py` ở thư mục gốc là backend legacy. Backend chính hiện tại là `src/app.py`.
+Backend chính hiện tại là `src/app.py`.
 
 ### 4. Cấu hình frontend
 
@@ -291,7 +291,6 @@ Nếu thiết bị chưa connected, kiểm tra:
 
 ```text
 Smart_Home_Face/
-├── app.py                    # Legacy Flask backend
 ├── src/                      # Backend Flask chính
 │   ├── app.py                # Entry point backend trên port 8000
 │   └── api/                  # API blueprints

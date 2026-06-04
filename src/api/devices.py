@@ -113,11 +113,11 @@ def create_devices_blueprint(device_control_service):
     def speaker_audio():
         data = request.get_json(silent=True) or {}
         try:
-            front_volume = int(data.get("frontVolume", 80))
+            front_volume = int(data.get("frontVolume", 100))
             house_gas_volume = int(data.get("houseGasVolume", 75))
             duration = int(data.get("duration", 5000))
             gas_threshold = int(data.get("gasThreshold", 500))
-            temperature_threshold = float(data.get("temperatureThreshold", 35))
+            temperature_threshold = float(data.get("temperatureThreshold", 50))
             humidity_threshold = float(data.get("humidityThreshold", 80))
         except (TypeError, ValueError):
             return jsonify({"error": "invalid_speaker_threshold"}), 400

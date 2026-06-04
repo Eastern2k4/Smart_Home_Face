@@ -29,7 +29,7 @@ export function SettingsPage() {
         <h2 className="text-2xl font-bold">Kết nối MQTT</h2>
         <div className="mt-8 space-y-6">
           <label className="block text-lg text-muted-foreground">
-            MQTT Broker
+            Máy chủ MQTT
           </label>
           <input
             className="h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
@@ -37,14 +37,14 @@ export function SettingsPage() {
           />
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className="text-lg text-muted-foreground">Port</label>
+              <label className="text-lg text-muted-foreground">Cổng</label>
               <input
                 className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
                 defaultValue="1883"
               />
             </div>
             <div>
-              <label className="text-lg text-muted-foreground">Topic</label>
+              <label className="text-lg text-muted-foreground">Chủ đề</label>
               <input
                 className="mt-2 h-16 w-full rounded-2xl border border-input bg-secondary px-6 text-2xl text-foreground"
                 defaultValue="smarthome/#"
@@ -55,7 +55,7 @@ export function SettingsPage() {
         </div>
       </div>
       <div className="rounded-xl border border-border bg-card p-8">
-        <h2 className="text-2xl font-bold">Gas Analytics</h2>
+        <h2 className="text-2xl font-bold">Phân tích khí gas</h2>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={gasChartData}>
             <defs>

@@ -8,6 +8,12 @@ import { useState } from "react";
 
 type LightId = "wc" | "kitchen" | "bedroom";
 
+const lightName: Record<LightId, string> = {
+  wc: "phòng vệ sinh",
+  kitchen: "phòng bếp",
+  bedroom: "phòng ngủ",
+};
+
 export function LightsPage() {
   useSensorPolling();
   useAutoLED();
@@ -25,7 +31,7 @@ export function LightsPage() {
         timestamp: new Date().toISOString(),
         type: "led",
         value: checked ? 1 : 0,
-        action: `${id} light turned ${checked ? "ON" : "OFF"}`,
+        action: `Đèn ${lightName[id]} đã ${checked ? "bật" : "tắt"}`,
       });
     } catch (error) {
       console.error(`Failed to toggle ${id} light`, error);
@@ -33,7 +39,7 @@ export function LightsPage() {
         timestamp: new Date().toISOString(),
         type: "led",
         value: checked ? 1 : 0,
-        action: `Failed to toggle ${id} light`,
+        action: `Không thể điều khiển đèn ${lightName[id]}`,
       });
     } finally {
       setLightBusy((prev) => ({ ...prev, [id]: false }));

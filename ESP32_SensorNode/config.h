@@ -22,8 +22,8 @@
 #define ECHO_WC_PIN       22
 
 // DHT sensors
-#define DHT_LIVING_PIN    23
-#define DHT_BEDROOM_PIN   25
+#define DHT_LIVING_PIN    25
+#define DHT_BEDROOM_PIN   23
 #define DHT_TYPE          DHT11
 
 // Gas sensor
@@ -44,7 +44,7 @@
 
 // Alarm defaults
 static const int DEFAULT_GAS_ALARM_THRESHOLD = 500;
-static const float DEFAULT_TEMPERATURE_ALARM_THRESHOLD = 35.0;
+static const float DEFAULT_TEMPERATURE_ALARM_THRESHOLD = 50.0;
 static const float DEFAULT_HUMIDITY_ALARM_THRESHOLD = 80.0;
 static const int GAS_ALARM_HYSTERESIS = 50;
 static const float TEMPERATURE_ALARM_HYSTERESIS = 1.0;
