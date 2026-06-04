@@ -11,6 +11,8 @@ function getApiBase() {
   return "http://localhost:8000";
 }
 
+export type SpeakerTarget = "front_door" | "house_gas";
+
 export const sensorApi = {
   async getAllSensors() {
     const res = await fetch(`${getApiBase()}/api/sensors`);
@@ -61,7 +63,7 @@ export const sensorApi = {
   },
 
   async triggerBuzzer(durationMs: number): Promise<void> {
-    const res = await fetch(`${getApiBase()}/api/speaker/alert`, {
+    const res = await fetch(`${getApiBase()}/api/speaker/alert/front_door`, {
       method: "POST",
     });
     if (!res.ok) throw new Error("Failed to trigger speaker alert");
@@ -78,8 +80,9 @@ export const sensorApi = {
 
   async updateSpeakerAudio(settings: {
     frontVolume: number;
-    indoorVolume: number;
-    frequency: number;
+    houseGasVolume: number;
+    frontFrequency: number;
+    houseGasFrequency: number;
     duration: number;
   }) {
     const res = await fetch(`${getApiBase()}/api/speaker/audio`, {
@@ -91,7 +94,7 @@ export const sensorApi = {
     return res.json();
   },
 
-  async testSpeaker(target: "front" | "indoor") {
+  async testSpeaker(target: SpeakerTarget) {
     const res = await fetch(`${getApiBase()}/api/speaker/test/${target}`, {
       method: "POST",
     });

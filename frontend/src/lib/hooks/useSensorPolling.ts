@@ -23,6 +23,11 @@ export function useSensorPolling() {
         const rawSensors = await sensorApi.getAllSensors();
         const sensors = {
           livingRoom: {
+            temperature: firstDefined(
+              rawSensors.livingRoom?.temperature ??
+                rawSensors.temperature ??
+                rawSensors.temp,
+            ),
             humidity: firstDefined(
               rawSensors.livingRoom?.humidity ??
                 rawSensors.humidity ??
@@ -30,6 +35,10 @@ export function useSensorPolling() {
             ),
           },
           bedroom: {
+            temperature: firstDefined(
+              rawSensors.bedroom?.temperature ??
+                rawSensors.bedroomTemperature,
+            ),
             humidity: firstDefined(
               rawSensors.bedroom?.humidity ??
                 rawSensors.bedroomHumidity,

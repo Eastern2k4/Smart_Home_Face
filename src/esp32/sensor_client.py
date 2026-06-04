@@ -20,6 +20,17 @@ from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 logger = logging.getLogger("sensor_client")
 
 DEFAULT_TIMEOUT = 5  # seconds
+SPEAKER_TARGETS = {
+    "front_door": "front-door",
+    "house_gas": "house-gas",
+}
+
+
+def speaker_target_path(target: str) -> str:
+    try:
+        return SPEAKER_TARGETS[target]
+    except KeyError:
+        raise ValueError("invalid_speaker_target") from None
 
 
 class SensorNodeClient:
@@ -84,28 +95,35 @@ class SensorNodeClient:
     def light_bedroom(self, on: bool):
         return self._request(f"/api/light/bedroom/{'on' if on else 'off'}")
 
-    def speaker_alert(self):
-        return self._request("/api/speaker/alert")
+    def speaker_alert(self, target: str = "front_door"):
+        target_path = speaker_target_path(target)
+        return self._request(f"/api/speaker/alert/{target_path}")
 
     def get_speaker_settings(self):
         return self._request("/api/speaker/settings")
 
     def update_speaker_audio(
-        self, front_volume: int, indoor_volume: int, frequency: int, duration: int
+        self,
+        front_volume: int,
+        house_gas_volume: int,
+        front_frequency: int,
+        house_gas_frequency: int,
+        duration: int,
     ):
         query = urlencode(
             {
                 "frontVolume": front_volume,
-                "indoorVolume": indoor_volume,
-                "frequency": frequency,
+                "houseGasVolume": house_gas_volume,
+                "frontFrequency": front_frequency,
+                "houseGasFrequency": house_gas_frequency,
                 "duration": duration,
             }
         )
         return self._request(f"/api/speaker/audio/update?{query}")
 
     def test_speaker(self, target: str):
-        query = urlencode({"target": target})
-        return self._request(f"/api/speaker/test?{query}")
+        target_path = speaker_target_path(target)
+        return self._request(f"/api/speaker/test/{target_path}")
 
     # ── sensors ───────────────────────────────────────────────────────────
 

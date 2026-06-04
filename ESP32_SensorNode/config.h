@@ -36,6 +36,8 @@
 #define LOA_TRUOC         27
 #define LOA_KHACH         14
 #define LOA_NGU           13
+#define FRONT_DOOR_SPEAKER_PIN LOA_TRUOC
+#define HOUSE_GAS_SPEAKER_PIN  LOA_KHACH
 #define SPEAKER_ACTIVE_LEVEL   HIGH
 #define SPEAKER_INACTIVE_LEVEL LOW
 

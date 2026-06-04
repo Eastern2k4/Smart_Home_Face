@@ -2,11 +2,24 @@
 import { useStore } from "@/lib/store";
 import { Switch } from "@/components/ui/switch";
 import { faceApi } from "@/lib/api/face";
-import { useEffect, useRef } from "react";
+import { sensorApi } from "@/lib/api/sensors";
+import { useEffect, useRef, useState } from "react";
+
+type DeviceStatus = {
+  speakers?: {
+    front_door?: { active?: boolean; reason?: string | null };
+    house_gas?: { active?: boolean; reason?: string | null };
+  };
+  alarmTriggers?: {
+    stranger?: boolean;
+    gas?: boolean;
+  };
+};
 
 export function AlertsPage() {
   const store = useStore();
   const lastEventRef = useRef<number | null>(null);
+  const [devices, setDevices] = useState<DeviceStatus | null>(null);
 
   useEffect(() => {
     const fetchRecognitionStatus = () => {
@@ -37,21 +50,50 @@ export function AlertsPage() {
     return () => window.clearInterval(interval);
   }, [store]);
 
+  useEffect(() => {
+    const fetchDevices = () => {
+      sensorApi
+        .getDevices()
+        .then((data) => setDevices(data))
+        .catch((error) => console.error("Failed to load device status", error));
+    };
+
+    fetchDevices();
+    const interval = window.setInterval(fetchDevices, 3000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const frontDoor = devices?.speakers?.front_door;
+  const houseGas = devices?.speakers?.house_gas;
+
   return (
     <div className="space-y-8">
       <div className="rounded-xl border border-border bg-card p-8">
-        <h2 className="text-2xl font-bold">Cài đặt ngưỡng cảnh báo</h2>
+        <h2 className="text-2xl font-bold">Nguồn cảnh báo</h2>
         <div className="mt-8 space-y-6">
           <div className="flex items-center justify-between rounded-xl border border-border p-6">
             <div>
-              <h3 className="text-2xl font-semibold">Cảnh báo khí gas</h3>
+              <h3 className="text-2xl font-semibold">Stranger face alert</h3>
               <p className="text-lg text-muted-foreground">
-                Phát cảnh báo khi nồng độ gas vượt ngưỡng
+                Source: backend recognition - speaker: front_door
               </p>
             </div>
             <div className="flex items-center gap-6 text-xl text-muted-foreground">
-              <span>Ngưỡng: {store.gasThreshold} ppm</span>
-              <Switch checked />
+              <span>{frontDoor?.reason ?? "No active reason"}</span>
+              <Switch checked={!!frontDoor?.active} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-border p-6">
+            <div>
+              <h3 className="text-2xl font-semibold">Gas alert</h3>
+              <p className="text-lg text-muted-foreground">
+                Source: ESP32 gas sensor - speaker: house_gas
+              </p>
+            </div>
+            <div className="flex items-center gap-6 text-xl text-muted-foreground">
+              <span>Threshold: {store.gasThreshold} ppm</span>
+              <span>{houseGas?.reason ?? "No active reason"}</span>
+              <Switch checked={!!houseGas?.active} />
             </div>
           </div>
         </div>

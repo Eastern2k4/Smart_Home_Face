@@ -49,6 +49,8 @@ class CameraRecognitionService:
         self.event_type = None
         self.event_message = None
         self.event_at = None
+        self.speaker_target = None
+        self.speaker_reason = None
         self.updated_at = None
 
     def start(self):
@@ -84,6 +86,8 @@ class CameraRecognitionService:
                 "event_type": self.event_type,
                 "event_message": self.event_message,
                 "event_at": self.event_at,
+                "speaker_target": self.speaker_target,
+                "speaker_reason": self.speaker_reason,
                 "updated_at": self.updated_at,
                 "last_action": self.device_control.last_action(),
                 "error": self.last_error_message,
@@ -177,6 +181,8 @@ class CameraRecognitionService:
                     self._set_event_locked(
                         "stranger_alert",
                         f"ALERT - Stranger detected on scan {self.stranger_scan_count}",
+                        speaker_target="front_door",
+                        speaker_reason="stranger_5_frames",
                     )
             self._touch_locked()
 
@@ -193,7 +199,10 @@ class CameraRecognitionService:
                 logger.exception("camera recognition close-door action failed")
             if should_alert:
                 try:
-                    self.device_control.trigger_speaker_alert()
+                    self.device_control.trigger_speaker_alert(
+                        target="front_door",
+                        reason="stranger_5_frames",
+                    )
                     stranger_path = move_temp_capture_to_stranger(capture.image_path)
                 except Exception:
                     logger.exception("camera recognition stranger alert failed")
@@ -214,11 +223,19 @@ class CameraRecognitionService:
                 self.image_path = stranger_path
                 self._touch_locked()
 
-    def _set_event_locked(self, event_type, event_message):
+    def _set_event_locked(
+        self,
+        event_type,
+        event_message,
+        speaker_target=None,
+        speaker_reason=None,
+    ):
         self.event_id += 1
         self.event_type = event_type
         self.event_message = event_message
         self.event_at = self._now_iso()
+        self.speaker_target = speaker_target
+        self.speaker_reason = speaker_reason
 
     def _touch_locked(self):
         self.updated_at = self._now_iso()

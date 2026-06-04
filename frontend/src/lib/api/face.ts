@@ -32,6 +32,8 @@ export interface RecognitionStatus {
   event_type: "host" | "stranger_alert" | null;
   event_message: string | null;
   event_at: string | null;
+  speaker_target: "front_door" | "house_gas" | null;
+  speaker_reason: "stranger_5_frames" | "gas_threshold_exceeded" | "manual_test" | null;
   updated_at: string | null;
   error: string | null;
 }

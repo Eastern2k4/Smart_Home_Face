@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request
 from src.services.errors import ArduinoNotRegistered, ArduinoUnreachable
 
 logger = logging.getLogger("devices_api")
+SPEAKER_TARGETS = {"front_door", "house_gas"}
 
 
 def _arduino_call(fn, *args, **kwargs):
@@ -81,9 +82,28 @@ def create_devices_blueprint(device_control_service):
     @devices_bp.route("/speaker/alert", methods=["POST"])
     def speaker_alert():
         def _trigger():
-            return device_control_service.trigger_speaker_alert().response
+            return device_control_service.trigger_speaker_alert(
+                target="front_door",
+                reason="stranger_5_frames",
+            ).to_dict()
 
         return _arduino_call(_trigger)
+
+    @devices_bp.route("/speaker/alert/<target>", methods=["POST"])
+    def speaker_alert_target(target):
+        if target not in SPEAKER_TARGETS:
+            return jsonify({"error": "invalid_speaker_target"}), 400
+
+        data = request.get_json(silent=True) or {}
+        reason = data.get("reason") or (
+            "stranger_5_frames" if target == "front_door" else "manual_test"
+        )
+        return _arduino_call(
+            lambda: device_control_service.trigger_speaker_alert(
+                target=target,
+                reason=reason,
+            ).to_dict()
+        )
 
     @devices_bp.route("/speaker/settings", methods=["GET"])
     def speaker_settings():
@@ -95,15 +115,16 @@ def create_devices_blueprint(device_control_service):
         return _arduino_call(
             device_control_service.update_speaker_audio,
             int(data.get("frontVolume", 80)),
-            int(data.get("indoorVolume", 60)),
-            int(data.get("frequency", 880)),
+            int(data.get("houseGasVolume", 75)),
+            int(data.get("frontFrequency", data.get("frequency", 880))),
+            int(data.get("houseGasFrequency", 1200)),
             int(data.get("duration", 5000)),
         )
 
     @devices_bp.route("/speaker/test/<target>", methods=["POST"])
     def speaker_test(target):
-        if target not in ("front", "indoor"):
-            return jsonify({"error": "target must be 'front' or 'indoor'"}), 400
+        if target not in SPEAKER_TARGETS:
+            return jsonify({"error": "invalid_speaker_target"}), 400
         return _arduino_call(device_control_service.test_speaker, target)
 
     return devices_bp

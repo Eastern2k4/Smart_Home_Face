@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { sensorApi } from "@/lib/api/sensors";
 import { useSensorPolling } from "@/lib/hooks/useSensorPolling";
 import { useStore } from "@/lib/store";
-import { DoorClosed, DoorOpen, Droplets, Gauge } from "lucide-react";
+import { DoorClosed, DoorOpen, Droplets, Gauge, Thermometer } from "lucide-react";
 import { useMemo } from "react";
 import {
   CartesianGrid,
@@ -19,7 +19,11 @@ import {
 export function SensorsPage() {
   useSensorPolling();
   const store = useStore();
-  const { humidity } = store.sensors.livingRoom;
+  const livingRoom = store.sensors.livingRoom;
+  const bedroom = store.sensors.bedroom;
+
+  const formatNumber = (value: number | null, digits = 1) =>
+    value === null ? "N/A" : value.toFixed(digits);
 
   const distanceChartData = useMemo(() => {
     const wc = store.stats.wcDistances;
@@ -41,13 +45,41 @@ export function SensorsPage() {
     <div className="space-y-8">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <StatCard
-          title="Độ ẩm ESP32"
-          value={humidity ?? "--"}
-          unit="%"
+          title="Nhiệt độ phòng khách"
+          value={formatNumber(livingRoom.temperature)}
+          unit={livingRoom.temperature === null ? undefined : "°C"}
+          icon={Thermometer}
+          status={
+            livingRoom.temperature !== null && livingRoom.temperature >= 35
+              ? "warning"
+              : "normal"
+          }
+        />
+        <StatCard
+          title="Độ ẩm phòng khách"
+          value={formatNumber(livingRoom.humidity)}
+          unit={livingRoom.humidity === null ? undefined : "%"}
           icon={Droplets}
         />
         <StatCard
-          title="WC Sensor"
+          title="Độ ẩm phòng ngủ"
+          value={formatNumber(bedroom.humidity)}
+          unit={bedroom.humidity === null ? undefined : "%"}
+          icon={Droplets}
+        />
+        <StatCard
+          title="Nhiệt độ phòng ngủ"
+          value={formatNumber(bedroom.temperature)}
+          unit={bedroom.temperature === null ? undefined : "°C"}
+          icon={Thermometer}
+          status={
+            bedroom.temperature !== null && bedroom.temperature >= 35
+              ? "warning"
+              : "normal"
+          }
+        />
+        <StatCard
+          title="Cảm biến WC"
           value={
             store.sensors.wc.distance === -1 ? "Out" : store.sensors.wc.distance
           }
@@ -55,7 +87,7 @@ export function SensorsPage() {
           icon={Gauge}
         />
         <StatCard
-          title="Kitchen Sensor"
+          title="Cảm biến bếp"
           value={
             store.sensors.kitchen.distance === -1
               ? "Out"

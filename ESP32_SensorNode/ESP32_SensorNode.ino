@@ -31,6 +31,8 @@ WebServer server(SENSOR_HTTP_PORT);
 #define LOA_TRUOC         27
 #define LOA_KHACH         14
 #define LOA_NGU           13
+#define FRONT_DOOR_SPEAKER_PIN LOA_TRUOC
+#define HOUSE_GAS_SPEAKER_PIN  LOA_KHACH
 
 // Speaker sine-wave PWM config.
 #define SPEAKER_PWM_FREQ       20000
@@ -42,32 +44,51 @@ DHT dhtLiving(DHT_LIVING_PIN, DHT_TYPE);
 DHT dhtBedroom(DHT_BEDROOM_PIN, DHT_TYPE);
 Servo doorServo;
 
+struct SpeakerChannel {
+  const char* id;
+  int pin;
+  int volume;
+  int frequency;
+  bool active;
+  const char* reason;
+  unsigned long activeUntilMs;
+};
+
 // ================= DEVICE STATE =================
 bool wcLightState = false;
 bool kitchenLightState = false;
 bool bedroomLightState = false;
 bool doorOpenState = false;
 bool doorServoAttached = false;
-bool indoorAlarmActive = false;
-bool indoorAlarmEnabled = true;
+bool speakerAlarmEnabled = true;
 bool gasAlarmActive = false;
-bool temperatureAlarmActive = false;
-bool humidityAlarmActive = false;
 int gasAlarmThreshold = DEFAULT_GAS_ALARM_THRESHOLD;
-float temperatureAlarmThreshold = 35.0;
-float humidityAlarmThreshold = DEFAULT_HUMIDITY_ALARM_THRESHOLD;
-const float TEMPERATURE_ALARM_HYSTERESIS = 1.0;
 unsigned long lastAlarmCheckMs = 0;
 unsigned long lastBackendRegisterMs = 0;
-unsigned long frontDoorSpeakerAlertUntilMs = 0;
-unsigned long indoorSpeakerAlertUntilMs = 0;
 unsigned long speakerAlertDurationMs = SPEAKER_ALERT_DURATION_MS;
-int frontDoorSpeakerVolume = 80;
-int indoorSpeakerVolume = 60;
-int speakerSineFrequency = 880;
+SpeakerChannel frontDoorSpeaker = {
+  "front_door",
+  FRONT_DOOR_SPEAKER_PIN,
+  80,
+  880,
+  false,
+  nullptr,
+  0
+};
+SpeakerChannel houseGasSpeaker = {
+  "house_gas",
+  HOUSE_GAS_SPEAKER_PIN,
+  75,
+  1200,
+  false,
+  nullptr,
+  0
+};
 bool speakersPwmReady = false;
-unsigned long lastSineUpdateUs = 0;
-uint8_t sineIndex = 0;
+unsigned long lastFrontDoorSineUpdateUs = 0;
+unsigned long lastHouseGasSineUpdateUs = 0;
+uint8_t frontDoorSineIndex = 0;
+uint8_t houseGasSineIndex = 0;
 const uint8_t SINE_TABLE[SINE_SAMPLE_COUNT] = {
   128, 152, 176, 198, 218, 234, 245, 253,
   255, 253, 245, 234, 218, 198, 176, 152,
@@ -167,101 +188,124 @@ String jsonFloat(float value) {
   return isnan(value) ? "null" : String(value);
 }
 
+String jsonReason(const char* reason) {
+  return reason == nullptr ? "null" : "\"" + String(reason) + "\"";
+}
+
 void configureSpeakerPwm() {
   if (speakersPwmReady) {
     return;
   }
-  ledcAttach(LOA_TRUOC, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcAttach(LOA_KHACH, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
-  ledcAttach(LOA_NGU, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  ledcAttach(frontDoorSpeaker.pin, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  ledcAttach(houseGasSpeaker.pin, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  pinMode(LOA_NGU, OUTPUT);
+  digitalWrite(LOA_NGU, SPEAKER_INACTIVE_LEVEL);
   speakersPwmReady = true;
 }
 
-int sineDutyForVolume(int volume) {
+int sineDutyForVolume(int volume, uint8_t sineIndex) {
   int centered = static_cast<int>(SINE_TABLE[sineIndex]) - 128;
   int scaled = 128 + (centered * constrain(volume, 0, 100)) / 100;
   return constrain(scaled, 0, 255);
 }
 
-void writeSpeakerSine(bool frontActive, bool indoorActive) {
+bool speakerIsActive(SpeakerChannel &channel) {
+  if (channel.activeUntilMs != 0 && millis() >= channel.activeUntilMs) {
+    channel.active = false;
+    channel.reason = nullptr;
+    channel.activeUntilMs = 0;
+  }
+  return channel.active;
+}
+
+void writeSpeakerChannel(SpeakerChannel &channel, uint8_t sineIndex) {
   configureSpeakerPwm();
-  ledcWrite(LOA_TRUOC, frontActive ? sineDutyForVolume(frontDoorSpeakerVolume) : 0);
-  ledcWrite(LOA_KHACH, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
-  ledcWrite(LOA_NGU, indoorActive ? sineDutyForVolume(indoorSpeakerVolume) : 0);
+  ledcWrite(
+    channel.pin,
+    speakerIsActive(channel) ? sineDutyForVolume(channel.volume, sineIndex) : 0
+  );
 }
 
 void updateSpeakerWaveforms() {
   configureSpeakerPwm();
-  bool frontActive =
-    frontDoorSpeakerAlertUntilMs != 0 && millis() < frontDoorSpeakerAlertUntilMs;
-  bool indoorActive = indoorAlarmActive;
+  bool frontActive = speakerIsActive(frontDoorSpeaker);
+  bool gasActive = speakerIsActive(houseGasSpeaker);
 
-  if (!frontActive && !indoorActive) {
-    writeSpeakerSine(false, false);
+  if (!frontActive && !gasActive) {
+    ledcWrite(frontDoorSpeaker.pin, 0);
+    ledcWrite(houseGasSpeaker.pin, 0);
+    digitalWrite(LOA_NGU, SPEAKER_INACTIVE_LEVEL);
     return;
   }
 
-  unsigned long intervalUs =
-    1000000UL / max(1, speakerSineFrequency * SINE_SAMPLE_COUNT);
   unsigned long nowUs = micros();
-  if (nowUs - lastSineUpdateUs >= intervalUs) {
-    lastSineUpdateUs = nowUs;
-    sineIndex = (sineIndex + 1) % SINE_SAMPLE_COUNT;
-    writeSpeakerSine(frontActive, indoorActive);
+
+  if (frontActive) {
+    unsigned long frontIntervalUs =
+      1000000UL / max(1, frontDoorSpeaker.frequency * SINE_SAMPLE_COUNT);
+    if (nowUs - lastFrontDoorSineUpdateUs >= frontIntervalUs) {
+      lastFrontDoorSineUpdateUs = nowUs;
+      frontDoorSineIndex = (frontDoorSineIndex + 1) % SINE_SAMPLE_COUNT;
+      writeSpeakerChannel(frontDoorSpeaker, frontDoorSineIndex);
+    }
+  } else {
+    ledcWrite(frontDoorSpeaker.pin, 0);
+  }
+
+  if (gasActive) {
+    unsigned long gasIntervalUs =
+      1000000UL / max(1, houseGasSpeaker.frequency * SINE_SAMPLE_COUNT);
+    if (nowUs - lastHouseGasSineUpdateUs >= gasIntervalUs) {
+      lastHouseGasSineUpdateUs = nowUs;
+      houseGasSineIndex = (houseGasSineIndex + 1) % SINE_SAMPLE_COUNT;
+      writeSpeakerChannel(houseGasSpeaker, houseGasSineIndex);
+    }
+  } else {
+    ledcWrite(houseGasSpeaker.pin, 0);
   }
 }
 
-void setIndoorSpeakers(bool on) {
-  indoorAlarmActive = on;
-  updateSpeakerWaveforms();
-}
-
-void setFrontDoorSpeaker(bool on) {
-  frontDoorSpeakerAlertUntilMs = on ? millis() + speakerAlertDurationMs : 0;
+void triggerTimedSpeaker(SpeakerChannel &channel, const char* reason) {
+  channel.active = true;
+  channel.reason = reason;
+  channel.activeUntilMs = millis() + speakerAlertDurationMs;
   updateSpeakerWaveforms();
 }
 
 void forceAllSpeakersOff() {
-  pinMode(LOA_TRUOC, OUTPUT);
-  pinMode(LOA_KHACH, OUTPUT);
+  pinMode(frontDoorSpeaker.pin, OUTPUT);
+  pinMode(houseGasSpeaker.pin, OUTPUT);
   pinMode(LOA_NGU, OUTPUT);
-  frontDoorSpeakerAlertUntilMs = 0;
-  indoorAlarmActive = false;
-  digitalWrite(LOA_TRUOC, SPEAKER_INACTIVE_LEVEL);
-  digitalWrite(LOA_KHACH, SPEAKER_INACTIVE_LEVEL);
+  frontDoorSpeaker.active = false;
+  frontDoorSpeaker.reason = nullptr;
+  frontDoorSpeaker.activeUntilMs = 0;
+  houseGasSpeaker.active = false;
+  houseGasSpeaker.reason = nullptr;
+  houseGasSpeaker.activeUntilMs = 0;
+  digitalWrite(frontDoorSpeaker.pin, SPEAKER_INACTIVE_LEVEL);
+  digitalWrite(houseGasSpeaker.pin, SPEAKER_INACTIVE_LEVEL);
   digitalWrite(LOA_NGU, SPEAKER_INACTIVE_LEVEL);
 }
 
-void updateIndoorAlarm() {
+void updateGasAlarm() {
   int gasValue = analogRead(GAS_PIN);
-  float livingTemp = dhtLiving.readTemperature();
-  float livingHum = dhtLiving.readHumidity();
-  float bedroomTemp = dhtBedroom.readTemperature();
-  float bedroomHum = dhtBedroom.readHumidity();
 
   gasAlarmActive = gasAlarmActive
     ? gasValue >= gasAlarmThreshold - GAS_ALARM_HYSTERESIS
     : gasValue > gasAlarmThreshold;
-  temperatureAlarmActive = temperatureAlarmActive
-    ? (!isnan(livingTemp) && livingTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS) ||
-      (!isnan(bedroomTemp) && bedroomTemp >= temperatureAlarmThreshold - TEMPERATURE_ALARM_HYSTERESIS)
-    : (!isnan(livingTemp) && livingTemp > temperatureAlarmThreshold) ||
-      (!isnan(bedroomTemp) && bedroomTemp > temperatureAlarmThreshold);
-  humidityAlarmActive = humidityAlarmActive
-    ? (!isnan(livingHum) && livingHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS) ||
-      (!isnan(bedroomHum) && bedroomHum >= humidityAlarmThreshold - HUMIDITY_ALARM_HYSTERESIS)
-      : (!isnan(livingHum) && livingHum > humidityAlarmThreshold) ||
-      (!isnan(bedroomHum) && bedroomHum > humidityAlarmThreshold);
 
-  bool isIndoorTestActive = indoorSpeakerAlertUntilMs != 0 && millis() < indoorSpeakerAlertUntilMs;
-  setIndoorSpeakers(
-    isIndoorTestActive ||
-    (indoorAlarmEnabled && (gasAlarmActive || temperatureAlarmActive || humidityAlarmActive))
-  );
+  if (speakerAlarmEnabled && gasAlarmActive) {
+    houseGasSpeaker.active = true;
+    houseGasSpeaker.reason = "gas_threshold_exceeded";
+    houseGasSpeaker.activeUntilMs = 0;
+  } else if (houseGasSpeaker.reason != nullptr &&
+             String(houseGasSpeaker.reason) == "gas_threshold_exceeded") {
+    houseGasSpeaker.active = false;
+    houseGasSpeaker.reason = nullptr;
+    houseGasSpeaker.activeUntilMs = 0;
+  }
 
-  bool frontDoorSpeakerAlertActive =
-    frontDoorSpeakerAlertUntilMs != 0 && millis() < frontDoorSpeakerAlertUntilMs;
-  setFrontDoorSpeaker(frontDoorSpeakerAlertActive);
+  updateSpeakerWaveforms();
 }
 
 void ensureDoorServoAttached() {
@@ -337,13 +381,23 @@ void handleDevices() {
   json += "\"kitchenLight\":" + String(kitchenLightState ? "true" : "false") + ",";
   json += "\"bedroomLight\":" + String(bedroomLightState ? "true" : "false") + ",";
   json += "\"doorOpen\":" + String(doorOpenState ? "true" : "false") + ",";
-  json += "\"livingRoomSpeaker\":" + String(indoorAlarmActive ? "true" : "false") + ",";
-  json += "\"bedroomSpeaker\":" + String(indoorAlarmActive ? "true" : "false") + ",";
-  json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"speakers\":{";
+  json += "\"front_door\":{";
+  json += "\"active\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false") + ",";
+  json += "\"volume\":" + String(frontDoorSpeaker.volume) + ",";
+  json += "\"frequency\":" + String(frontDoorSpeaker.frequency) + ",";
+  json += "\"reason\":" + jsonReason(frontDoorSpeaker.reason);
+  json += "},";
+  json += "\"house_gas\":{";
+  json += "\"active\":" + String(speakerIsActive(houseGasSpeaker) ? "true" : "false") + ",";
+  json += "\"volume\":" + String(houseGasSpeaker.volume) + ",";
+  json += "\"frequency\":" + String(houseGasSpeaker.frequency) + ",";
+  json += "\"reason\":" + jsonReason(houseGasSpeaker.reason);
+  json += "}";
+  json += "},";
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
-  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
-  json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
+  json += "\"stranger\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false");
   json += "}";
   json += "}";
 
@@ -428,73 +482,82 @@ void handleSpeakerSettings() {
   sendCORS();
 
   String json = "{";
-  json += "\"enabled\":" + String(indoorAlarmEnabled ? "true" : "false") + ",";
+  json += "\"enabled\":" + String(speakerAlarmEnabled ? "true" : "false") + ",";
   json += "\"gasThreshold\":" + String(gasAlarmThreshold) + ",";
-  json += "\"temperatureThreshold\":" + String(temperatureAlarmThreshold) + ",";
-  json += "\"humidityThreshold\":" + String(humidityAlarmThreshold) + ",";
-  json += "\"frontDoorVolume\":" + String(frontDoorSpeakerVolume) + ",";
-  json += "\"indoorVolume\":" + String(indoorSpeakerVolume) + ",";
-  json += "\"sineFrequency\":" + String(speakerSineFrequency) + ",";
   json += "\"alertDurationMs\":" + String(speakerAlertDurationMs) + ",";
   json += "\"waveform\":\"sine\",";
-  json += "\"indoorAlarmActive\":" + String(indoorAlarmActive ? "true" : "false") + ",";
+  json += "\"speakers\":{";
+  json += "\"front_door\":{";
+  json += "\"active\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false") + ",";
+  json += "\"volume\":" + String(frontDoorSpeaker.volume) + ",";
+  json += "\"frequency\":" + String(frontDoorSpeaker.frequency) + ",";
+  json += "\"reason\":" + jsonReason(frontDoorSpeaker.reason);
+  json += "},";
+  json += "\"house_gas\":{";
+  json += "\"active\":" + String(speakerIsActive(houseGasSpeaker) ? "true" : "false") + ",";
+  json += "\"volume\":" + String(houseGasSpeaker.volume) + ",";
+  json += "\"frequency\":" + String(houseGasSpeaker.frequency) + ",";
+  json += "\"reason\":" + jsonReason(houseGasSpeaker.reason);
+  json += "}";
+  json += "},";
   json += "\"alarmTriggers\":{";
   json += "\"gas\":" + String(gasAlarmActive ? "true" : "false") + ",";
-  json += "\"temperature\":" + String(temperatureAlarmActive ? "true" : "false") + ",";
-  json += "\"humidity\":" + String(humidityAlarmActive ? "true" : "false");
+  json += "\"stranger\":" + String(speakerIsActive(frontDoorSpeaker) ? "true" : "false");
   json += "}";
   json += "}";
 
   server.send(200, "application/json", json);
 }
 
-// GET /api/speaker/settings/update?enabled=true&gas=500&temperature=35&humidity=80
+// GET /api/speaker/settings/update?enabled=true&gas=500
 void handleSpeakerSettingsUpdate() {
   sendCORS();
 
-  if (!server.hasArg("enabled") || !server.hasArg("gas") ||
-      !server.hasArg("temperature") || !server.hasArg("humidity")) {
+  if (!server.hasArg("enabled") || !server.hasArg("gas")) {
     server.send(400, "application/json", "{\"error\":\"Missing speaker settings\"}");
     return;
   }
 
   int newGasThreshold = server.arg("gas").toInt();
-  float newTemperatureThreshold = server.arg("temperature").toFloat();
-  float newHumidityThreshold = server.arg("humidity").toFloat();
 
-  if (newGasThreshold < 0 || newTemperatureThreshold <= 0 || newHumidityThreshold <= 0) {
+  if (newGasThreshold < 0) {
     server.send(400, "application/json", "{\"error\":\"Invalid speaker thresholds\"}");
     return;
   }
 
-  indoorAlarmEnabled = server.arg("enabled") == "true";
+  speakerAlarmEnabled = server.arg("enabled") == "true";
   gasAlarmThreshold = newGasThreshold;
-  temperatureAlarmThreshold = newTemperatureThreshold;
-  humidityAlarmThreshold = newHumidityThreshold;
-  updateIndoorAlarm();
+  updateGasAlarm();
   handleSpeakerSettings();
 }
 
-// GET /api/speaker/alert
-void handleSpeakerAlert() {
+void handleFrontDoorSpeakerAlert() {
   sendCORS();
-  frontDoorSpeakerAlertUntilMs = millis() + speakerAlertDurationMs;
-  updateIndoorAlarm();
-  server.send(200, "application/json", "{\"success\":true,\"frontDoorSpeakerAlert\":true}");
+  triggerTimedSpeaker(frontDoorSpeaker, "stranger_5_frames");
+  server.send(200, "application/json", "{\"success\":true,\"target\":\"front_door\",\"reason\":\"stranger_5_frames\"}");
 }
 
-// GET /api/speaker/audio/update?frontVolume=80&indoorVolume=60&frequency=880&duration=5000
+void handleHouseGasSpeakerAlert() {
+  sendCORS();
+  triggerTimedSpeaker(houseGasSpeaker, "manual_test");
+  server.send(200, "application/json", "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\"}");
+}
+
+// GET /api/speaker/audio/update?frontVolume=80&houseGasVolume=75&frontFrequency=880&houseGasFrequency=1200&duration=5000
 void handleSpeakerAudioUpdate() {
   sendCORS();
 
   if (server.hasArg("frontVolume")) {
-    frontDoorSpeakerVolume = constrain(server.arg("frontVolume").toInt(), 0, 100);
+    frontDoorSpeaker.volume = constrain(server.arg("frontVolume").toInt(), 0, 100);
   }
-  if (server.hasArg("indoorVolume")) {
-    indoorSpeakerVolume = constrain(server.arg("indoorVolume").toInt(), 0, 100);
+  if (server.hasArg("houseGasVolume")) {
+    houseGasSpeaker.volume = constrain(server.arg("houseGasVolume").toInt(), 0, 100);
   }
-  if (server.hasArg("frequency")) {
-    speakerSineFrequency = constrain(server.arg("frequency").toInt(), 100, 3000);
+  if (server.hasArg("frontFrequency")) {
+    frontDoorSpeaker.frequency = constrain(server.arg("frontFrequency").toInt(), 100, 3000);
+  }
+  if (server.hasArg("houseGasFrequency")) {
+    houseGasSpeaker.frequency = constrain(server.arg("houseGasFrequency").toInt(), 100, 3000);
   }
   if (server.hasArg("duration")) {
     speakerAlertDurationMs = constrain(server.arg("duration").toInt(), 500, 30000);
@@ -503,17 +566,16 @@ void handleSpeakerAudioUpdate() {
   handleSpeakerSettings();
 }
 
-// GET /api/speaker/test?target=front|indoor
-void handleSpeakerTest() {
+void handleFrontDoorSpeakerTest() {
   sendCORS();
-  String target = server.arg("target");
-  if (target == "indoor") {
-    indoorSpeakerAlertUntilMs = millis() + speakerAlertDurationMs;
-  } else {
-    frontDoorSpeakerAlertUntilMs = millis() + speakerAlertDurationMs;
-  }
-  updateIndoorAlarm(); // Cập nhật trạng thái loa ngay lập tức
-  server.send(200, "application/json", "{\"success\":true,\"waveform\":\"sine\"}");
+  triggerTimedSpeaker(frontDoorSpeaker, "manual_test");
+  server.send(200, "application/json", "{\"success\":true,\"target\":\"front_door\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}");
+}
+
+void handleHouseGasSpeakerTest() {
+  sendCORS();
+  triggerTimedSpeaker(houseGasSpeaker, "manual_test");
+  server.send(200, "application/json", "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}");
 }
 
 // POST /api/speaker/volume?speakerId=1&volume=50
@@ -523,9 +585,9 @@ void handleSpeakerVolume() {
     int id = server.arg("speakerId").toInt();
     int vol = server.arg("volume").toInt();
     if (id == 1) {
-      indoorSpeakerVolume = constrain(vol, 0, 100);
+      frontDoorSpeaker.volume = constrain(vol, 0, 100);
     } else if (id == 2) {
-      frontDoorSpeakerVolume = constrain(vol, 0, 100);
+      houseGasSpeaker.volume = constrain(vol, 0, 100);
     }
     server.send(200, "application/json", "{\"success\":true}");
   } else {
@@ -603,9 +665,12 @@ void setup() {
 
   server.on("/api/speaker/settings", HTTP_GET, handleSpeakerSettings);
   server.on("/api/speaker/settings/update", HTTP_GET, handleSpeakerSettingsUpdate);
-  server.on("/api/speaker/alert", HTTP_GET, handleSpeakerAlert);
+  server.on("/api/speaker/alert", HTTP_GET, handleFrontDoorSpeakerAlert);
+  server.on("/api/speaker/alert/front-door", HTTP_GET, handleFrontDoorSpeakerAlert);
+  server.on("/api/speaker/alert/house-gas", HTTP_GET, handleHouseGasSpeakerAlert);
   server.on("/api/speaker/audio/update", HTTP_GET, handleSpeakerAudioUpdate);
-  server.on("/api/speaker/test", HTTP_GET, handleSpeakerTest);
+  server.on("/api/speaker/test/front-door", HTTP_GET, handleFrontDoorSpeakerTest);
+  server.on("/api/speaker/test/house-gas", HTTP_GET, handleHouseGasSpeakerTest);
   server.on("/api/speaker/volume", HTTP_POST, handleSpeakerVolume);
 
   server.begin();
@@ -625,16 +690,6 @@ void loop() {
   unsigned long now = millis();
   if (now - lastAlarmCheckMs >= ALARM_CHECK_INTERVAL_MS) {
     lastAlarmCheckMs = now;
-    updateIndoorAlarm();
-  }
-
-  // Tự động tắt loa nếu hết thời gian Test/Hú còi
-  if (frontDoorSpeakerAlertUntilMs != 0 && now >= frontDoorSpeakerAlertUntilMs) {
-    frontDoorSpeakerAlertUntilMs = 0;
-    updateIndoorAlarm();
-  }
-  if (indoorSpeakerAlertUntilMs != 0 && now >= indoorSpeakerAlertUntilMs) {
-    indoorSpeakerAlertUntilMs = 0;
-    updateIndoorAlarm();
+    updateGasAlarm();
   }
 }

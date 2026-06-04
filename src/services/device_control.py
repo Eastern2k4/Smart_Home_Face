@@ -14,6 +14,7 @@ class ActionResult:
     allowed: bool
     executed: bool
     reason: str
+    target: str | None = None
     response: dict | None = None
 
     def to_dict(self) -> dict:
@@ -21,6 +22,7 @@ class ActionResult:
             "type": self.type,
             "allowed": self.allowed,
             "executed": self.executed,
+            "target": self.target,
             "reason": self.reason,
             "response": self.response,
         }
@@ -135,14 +137,17 @@ class DeviceControlService:
             )
         return self.close_door(reason=reason)
 
-    def trigger_speaker_alert(self) -> ActionResult:
-        result = self.sensor.speaker_alert()
+    def trigger_speaker_alert(
+        self, target: str = "front_door", reason: str = "stranger_5_frames"
+    ) -> ActionResult:
+        result = self.sensor.speaker_alert(target)
         return self._record_action(
             ActionResult(
                 "speaker_alert",
                 allowed=True,
                 executed=True,
-                reason="stranger_alert",
+                target=target,
+                reason=reason,
                 response=result,
             )
         )
@@ -151,12 +156,18 @@ class DeviceControlService:
         return self.sensor.get_speaker_settings()
 
     def update_speaker_audio(
-        self, front_volume: int, indoor_volume: int, frequency: int, duration: int
+        self,
+        front_volume: int,
+        house_gas_volume: int,
+        front_frequency: int,
+        house_gas_frequency: int,
+        duration: int,
     ):
         return self.sensor.update_speaker_audio(
             front_volume,
-            indoor_volume,
-            frequency,
+            house_gas_volume,
+            front_frequency,
+            house_gas_frequency,
             duration,
         )
 
