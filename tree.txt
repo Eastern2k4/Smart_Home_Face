@@ -1,0 +1,160 @@
+.
+├── app.py
+├── CameraWebServer
+│   ├── board_config.h
+│   ├── camera_hal.c
+│   ├── camera_hal.h
+│   ├── camera_index.h
+│   ├── camera_pins.h
+│   ├── CameraWebServer.ino
+│   ├── ci.yml
+│   ├── config.h
+│   ├── http_server.c
+│   ├── http_server.h
+│   ├── image_utils.c
+│   ├── image_utils.h
+│   ├── led_control.c
+│   ├── led_control.h
+│   └── partitions.csv
+├── ESP32_SensorNode
+│   └── ESP32_SensorNode.ino
+├── ESP32_SETUP.md
+├── face_app.py
+├── faces
+│   └── ds_model_arcface_detector_opencv_aligned_normalization_base_expand_0.pkl
+├── frontend
+│   ├── components.json
+│   ├── next.config.mjs
+│   ├── next-env.d.ts
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── pnpm-lock.yaml
+│   ├── postcss.config.mjs
+│   ├── public
+│   │   ├── icon.svg
+│   │   ├── placeholder-logo.svg
+│   │   └── placeholder.svg
+│   ├── src
+│   │   ├── app
+│   │   │   ├── globals.css
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
+│   │   ├── components
+│   │   │   ├── DoorCameraCard.tsx
+│   │   │   ├── LightCard.tsx
+│   │   │   ├── StatCard.tsx
+│   │   │   └── ui
+│   │   │       ├── accordion.tsx
+│   │   │       ├── alert-dialog.tsx
+│   │   │       ├── alert.tsx
+│   │   │       ├── aspect-ratio.tsx
+│   │   │       ├── avatar.tsx
+│   │   │       ├── badge.tsx
+│   │   │       ├── breadcrumb.tsx
+│   │   │       ├── button-group.tsx
+│   │   │       ├── button.tsx
+│   │   │       ├── calendar.tsx
+│   │   │       ├── card.tsx
+│   │   │       ├── carousel.tsx
+│   │   │       ├── chart.tsx
+│   │   │       ├── checkbox.tsx
+│   │   │       ├── collapsible.tsx
+│   │   │       ├── command.tsx
+│   │   │       ├── context-menu.tsx
+│   │   │       ├── dialog.tsx
+│   │   │       ├── drawer.tsx
+│   │   │       ├── dropdown-menu.tsx
+│   │   │       ├── empty.tsx
+│   │   │       ├── field.tsx
+│   │   │       ├── form.tsx
+│   │   │       ├── hover-card.tsx
+│   │   │       ├── input-group.tsx
+│   │   │       ├── input-otp.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── item.tsx
+│   │   │       ├── kbd.tsx
+│   │   │       ├── label.tsx
+│   │   │       ├── menubar.tsx
+│   │   │       ├── navigation-menu.tsx
+│   │   │       ├── pagination.tsx
+│   │   │       ├── popover.tsx
+│   │   │       ├── progress.tsx
+│   │   │       ├── radio-group.tsx
+│   │   │       ├── resizable.tsx
+│   │   │       ├── scroll-area.tsx
+│   │   │       ├── select.tsx
+│   │   │       ├── separator.tsx
+│   │   │       ├── sheet.tsx
+│   │   │       ├── sidebar.tsx
+│   │   │       ├── skeleton.tsx
+│   │   │       ├── slider.tsx
+│   │   │       ├── sonner.tsx
+│   │   │       ├── spinner.tsx
+│   │   │       ├── switch.tsx
+│   │   │       ├── table.tsx
+│   │   │       ├── tabs.tsx
+│   │   │       ├── textarea.tsx
+│   │   │       ├── toaster.tsx
+│   │   │       ├── toast.tsx
+│   │   │       ├── toggle-group.tsx
+│   │   │       ├── toggle.tsx
+│   │   │       ├── tooltip.tsx
+│   │   │       ├── use-mobile.tsx
+│   │   │       └── use-toast.ts
+│   │   ├── hooks
+│   │   │   ├── use-mobile.ts
+│   │   │   └── use-toast.ts
+│   │   ├── layouts
+│   │   │   └── MainLayout.tsx
+│   │   ├── lib
+│   │   │   ├── api
+│   │   │   │   ├── face.ts
+│   │   │   │   └── sensors.ts
+│   │   │   ├── hooks
+│   │   │   │   ├── useAutoLED.ts
+│   │   │   │   ├── useCameraStream.ts
+│   │   │   │   └── useSensorPolling.ts
+│   │   │   ├── store.ts
+│   │   │   └── utils.ts
+│   │   ├── pages
+│   │   │   ├── AlertsPage.tsx
+│   │   │   ├── CameraPage.tsx
+│   │   │   ├── FaceIdPage.tsx
+│   │   │   ├── LightsPage.tsx
+│   │   │   ├── OverviewPage.tsx
+│   │   │   ├── SensorsPage.tsx
+│   │   │   ├── SettingsPage.tsx
+│   │   │   └── SpeakersPage.tsx
+│   │   └── styles
+│   │       └── globals.css
+│   └── tsconfig.json
+├── README.md
+├── recognition
+│   ├── face_matcher.py
+│   └── __init__.py
+├── requirements.txt
+├── src
+│   ├── api
+│   │   ├── arduino.py
+│   │   └── frontend.py
+│   ├── app.py
+│   ├── config.py
+│   ├── esp32
+│   │   ├── camera_client.py
+│   │   └── sensor_client.py
+│   ├── face_recognition
+│   │   ├── camera_monitor.py
+│   │   ├── database.py
+│   │   └── verifier.py
+│   ├── orchestrator
+│   │   └── __init__.py
+│   └── state.py
+├── static
+│   ├── script.js
+│   └── style.css
+├── templates
+│   └── index.html
+├── test_esp32.py
+└── tree.txt
+
+25 directories, 133 files
