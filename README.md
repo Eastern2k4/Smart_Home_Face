@@ -298,8 +298,10 @@ Smart_Home_Face/
 ├── frontend/                 # Frontend Next.js
 ├── requirements.txt          # Python dependencies
 ├── README.md                 # Tài liệu dự án
-├── faces/                    # Database khuôn mặt
-├── temp/                     # Thư mục tạm
+├── database/                 # Database khuôn mặt
+│   ├── Hosts/                # Ảnh chủ nhà
+│   ├── Strangers/            # Ảnh người lạ sau cảnh báo
+│   └── Temp/                 # Ảnh tạm khi camera quét
 ├── CameraWebServer/          # Firmware ESP32-CAM
 └── ESP32_SensorNode/         # Firmware ESP32 Sensor Node
 ```

@@ -6,6 +6,10 @@ __pycache__/
 dist/
 build/
 .DS_Store
+*.swp
+*.tsbuildinfo
+tree.txt
+pythoon
 .env
 config/app.local.json
 config/app.generated.json

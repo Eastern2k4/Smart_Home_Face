@@ -102,8 +102,8 @@ WIFI_CONFIG = APP_CONFIG["wifi"]
 RECOGNITION_CONFIG = APP_CONFIG["recognition"]
 FIRMWARE_CONFIG = APP_CONFIG["firmware"]
 
-DB_PATH = os.path.join(BASE_DIR, "faces")
-TEMP_PATH = os.path.join(BASE_DIR, "temp")
+DB_PATH = os.path.join(BASE_DIR, "database")
+TEMP_PATH = os.path.join(DB_PATH, "Temp")
 STRANGER_PATH = os.path.join(DB_PATH, "Strangers")
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp"}

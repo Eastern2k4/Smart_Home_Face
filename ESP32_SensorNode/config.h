@@ -43,7 +43,7 @@
 #define SPEAKER_INACTIVE_LEVEL LOW
 
 // Alarm defaults
-static const int DEFAULT_GAS_ALARM_THRESHOLD = 500;
+static const int DEFAULT_GAS_ALARM_THRESHOLD = 3500;
 static const float DEFAULT_TEMPERATURE_ALARM_THRESHOLD = 50.0;
 static const float DEFAULT_HUMIDITY_ALARM_THRESHOLD = 80.0;
 static const int GAS_ALARM_HYSTERESIS = 50;
