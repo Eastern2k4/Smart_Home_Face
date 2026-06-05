@@ -3,6 +3,7 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
 #include <esp_system.h>
+#include <math.h>
 
 #include "config.h"
 #include <HTTPClient.h>
@@ -36,21 +37,24 @@ WebServer server(SENSOR_HTTP_PORT);
 #define HOUSE_ENV_SPEAKER_SECONDARY_PIN LOA_NGU
 
 // ================= SERVO CONFIG =================
-// For 270-degree servo.
+// Door servo range.
 // 90  = close
-// 270 = open
+// 180 = open
 #define SERVO_MIN_US       500
 #define SERVO_MAX_US       2400
-#define SERVO_MAX_ANGLE    270
+#define SERVO_MAX_ANGLE    180
 
 #define DOOR_CLOSE_ANGLE   90
-#define DOOR_OPEN_ANGLE    270
+#define DOOR_OPEN_ANGLE    180
 #define SERVO_STEP_DELAY   20
+#define SERVO_STEP_ANGLE   10
 
-// Speaker sine-wave PWM config.
-#define SPEAKER_PWM_FREQ       20000
+// Speaker frequency-sweep PWM config.
 #define SPEAKER_PWM_RESOLUTION 8
-#define SINE_SAMPLE_COUNT      32
+#define SPEAKER_SWEEP_RANGE_HZ 1000
+#define SPEAKER_SWEEP_INTERVAL_MS 2
+#define SPEAKER_SWEEP_MAX_DEGREES 180
+#define SPEAKER_MAX_DUTY       128
 #define HOUSE_ENV_SPEAKER_PINS_COUNT 2
 
 // ================= OBJECTS =================
@@ -94,7 +98,7 @@ SpeakerChannel frontDoorSpeaker = {
   "front_door",
   FRONT_DOOR_SPEAKER_PIN,
   100,
-  880,
+  1000,
   false,
   nullptr,
   0
@@ -103,8 +107,8 @@ SpeakerChannel frontDoorSpeaker = {
 SpeakerChannel houseGasSpeaker = {
   "house_gas",
   HOUSE_GAS_SPEAKER_PIN,
-  75,
-  1200,
+  100,
+  2000,
   false,
   nullptr,
   0
@@ -116,17 +120,10 @@ const int HOUSE_ENV_SPEAKER_PINS[HOUSE_ENV_SPEAKER_PINS_COUNT] = {
 };
 
 bool speakersPwmReady = false;
-unsigned long lastFrontDoorSineUpdateUs = 0;
-unsigned long lastHouseGasSineUpdateUs = 0;
-uint8_t frontDoorSineIndex = 0;
-uint8_t houseGasSineIndex = 0;
-
-const uint8_t SINE_TABLE[SINE_SAMPLE_COUNT] = {
-  128, 152, 176, 198, 218, 234, 245, 253,
-  255, 253, 245, 234, 218, 198, 176, 152,
-  128, 103, 79, 57, 37, 21, 10, 2,
-  0, 2, 10, 21, 37, 57, 79, 103
-};
+unsigned long lastFrontDoorSweepUpdateMs = 0;
+unsigned long lastHouseGasSweepUpdateMs = 0;
+int frontDoorSweepDegrees = 0;
+int houseGasSweepDegrees = 0;
 
 // ================= BACKEND REGISTER =================
 void registerWithBackend() {
@@ -249,17 +246,18 @@ void moveDoorServoSmooth(int targetAngle) {
   targetAngle = constrain(targetAngle, 0, SERVO_MAX_ANGLE);
 
   if (currentDoorAngle < targetAngle) {
-    for (int pos = currentDoorAngle; pos <= targetAngle; pos++) {
+    for (int pos = currentDoorAngle; pos <= targetAngle; pos += SERVO_STEP_ANGLE) {
       writeDoorServoAngle(pos);
       delay(SERVO_STEP_DELAY);
     }
   } else {
-    for (int pos = currentDoorAngle; pos >= targetAngle; pos--) {
+    for (int pos = currentDoorAngle; pos >= targetAngle; pos -= SERVO_STEP_ANGLE) {
       writeDoorServoAngle(pos);
       delay(SERVO_STEP_DELAY);
     }
   }
 
+  writeDoorServoAngle(targetAngle);
   currentDoorAngle = targetAngle;
 }
 
@@ -285,19 +283,24 @@ void configureSpeakerPwm() {
     return;
   }
 
-  ledcAttach(frontDoorSpeaker.pin, SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+  ledcAttach(frontDoorSpeaker.pin, frontDoorSpeaker.frequency, SPEAKER_PWM_RESOLUTION);
+  ledcWrite(frontDoorSpeaker.pin, 0);
   for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
-    ledcAttach(HOUSE_ENV_SPEAKER_PINS[i], SPEAKER_PWM_FREQ, SPEAKER_PWM_RESOLUTION);
+    ledcAttach(HOUSE_ENV_SPEAKER_PINS[i], houseGasSpeaker.frequency, SPEAKER_PWM_RESOLUTION);
     ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], 0);
   }
 
   speakersPwmReady = true;
 }
 
-int sineDutyForVolume(int volume, uint8_t sineIndex) {
-  int centered = static_cast<int>(SINE_TABLE[sineIndex]) - 128;
-  int scaled = 128 + (centered * constrain(volume, 0, 100)) / 100;
-  return constrain(scaled, 0, 255);
+int dutyForVolume(int volume) {
+  return constrain((SPEAKER_MAX_DUTY * constrain(volume, 0, 100)) / 100, 0, 255);
+}
+
+int sweptFrequencyForChannel(SpeakerChannel &channel, int sweepDegrees) {
+  float radians = sweepDegrees * 3.14159265f / 180.0f;
+  int sweptFrequency = channel.frequency + static_cast<int>(sin(radians) * SPEAKER_SWEEP_RANGE_HZ);
+  return constrain(sweptFrequency, 1, 20000);
 }
 
 bool speakerIsActive(SpeakerChannel &channel) {
@@ -310,18 +313,20 @@ bool speakerIsActive(SpeakerChannel &channel) {
   return channel.active;
 }
 
-void writeSpeakerChannel(SpeakerChannel &channel, uint8_t sineIndex) {
+  void writeSpeakerChannel(SpeakerChannel &channel, int sweptFrequency) {
   configureSpeakerPwm();
 
-  int duty = speakerIsActive(channel) ? sineDutyForVolume(channel.volume, sineIndex) : 0;
+  int duty = speakerIsActive(channel) ? dutyForVolume(channel.volume) : 0;
 
   if (String(channel.id) == "house_gas") {
     for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+      ledcChangeFrequency(HOUSE_ENV_SPEAKER_PINS[i], sweptFrequency, SPEAKER_PWM_RESOLUTION);
       ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], duty);
     }
     return;
   }
 
+  ledcChangeFrequency(channel.pin, sweptFrequency, SPEAKER_PWM_RESOLUTION);
   ledcWrite(channel.pin, duty);
 }
 
@@ -339,29 +344,25 @@ void updateSpeakerWaveforms() {
     return;
   }
 
-  unsigned long nowUs = micros();
+  unsigned long nowMs = millis();
 
   if (frontActive) {
-    unsigned long frontIntervalUs =
-      1000000UL / max(1, frontDoorSpeaker.frequency * SINE_SAMPLE_COUNT);
-
-    if (nowUs - lastFrontDoorSineUpdateUs >= frontIntervalUs) {
-      lastFrontDoorSineUpdateUs = nowUs;
-      frontDoorSineIndex = (frontDoorSineIndex + 1) % SINE_SAMPLE_COUNT;
-      writeSpeakerChannel(frontDoorSpeaker, frontDoorSineIndex);
+    if (nowMs - lastFrontDoorSweepUpdateMs >= SPEAKER_SWEEP_INTERVAL_MS) {
+      lastFrontDoorSweepUpdateMs = nowMs;
+      int sweptFrequency = sweptFrequencyForChannel(frontDoorSpeaker, frontDoorSweepDegrees);
+      frontDoorSweepDegrees = (frontDoorSweepDegrees + 1) % SPEAKER_SWEEP_MAX_DEGREES;
+      writeSpeakerChannel(frontDoorSpeaker, sweptFrequency);
     }
   } else {
     ledcWrite(frontDoorSpeaker.pin, 0);
   }
 
   if (gasActive) {
-    unsigned long gasIntervalUs =
-      1000000UL / max(1, houseGasSpeaker.frequency * SINE_SAMPLE_COUNT);
-
-    if (nowUs - lastHouseGasSineUpdateUs >= gasIntervalUs) {
-      lastHouseGasSineUpdateUs = nowUs;
-      houseGasSineIndex = (houseGasSineIndex + 1) % SINE_SAMPLE_COUNT;
-      writeSpeakerChannel(houseGasSpeaker, houseGasSineIndex);
+    if (nowMs - lastHouseGasSweepUpdateMs >= SPEAKER_SWEEP_INTERVAL_MS) {
+      lastHouseGasSweepUpdateMs = nowMs;
+      int sweptFrequency = sweptFrequencyForChannel(houseGasSpeaker, houseGasSweepDegrees);
+      houseGasSweepDegrees = (houseGasSweepDegrees + 1) % SPEAKER_SWEEP_MAX_DEGREES;
+      writeSpeakerChannel(houseGasSpeaker, sweptFrequency);
     }
   } else {
     for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
@@ -390,6 +391,13 @@ void forceAllSpeakersOff() {
   houseGasSpeaker.active = false;
   houseGasSpeaker.reason = nullptr;
   houseGasSpeaker.activeUntilMs = 0;
+
+  if (speakersPwmReady) {
+    ledcWrite(frontDoorSpeaker.pin, 0);
+    for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
+      ledcWrite(HOUSE_ENV_SPEAKER_PINS[i], 0);
+    }
+  }
 
   digitalWrite(frontDoorSpeaker.pin, SPEAKER_INACTIVE_LEVEL);
   for (int i = 0; i < HOUSE_ENV_SPEAKER_PINS_COUNT; i++) {
@@ -616,7 +624,7 @@ void handleDoorOpen() {
   server.send(
     200,
     "application/json",
-    "{\"success\":true,\"doorOpen\":true,\"angle\":270}"
+    "{\"success\":true,\"doorOpen\":true,\"angle\":180}"
   );
 }
 
@@ -650,7 +658,7 @@ void handleSpeakerSettings() {
   json += "},";
 
   json += "\"alertDurationMs\":" + String(speakerAlertDurationMs) + ",";
-  json += "\"waveform\":\"sine\",";
+  json += "\"waveform\":\"frequency_sweep\",";
 
   json += "\"speakers\":{";
 
@@ -780,7 +788,7 @@ void handleFrontDoorSpeakerTest() {
   server.send(
     200,
     "application/json",
-    "{\"success\":true,\"target\":\"front_door\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}"
+    "{\"success\":true,\"target\":\"front_door\",\"reason\":\"manual_test\",\"waveform\":\"frequency_sweep\"}"
   );
 }
 
@@ -790,7 +798,7 @@ void handleHouseGasSpeakerTest() {
   server.send(
     200,
     "application/json",
-    "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\",\"waveform\":\"sine\"}"
+    "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\",\"waveform\":\"frequency_sweep\"}"
   );
 }
 
@@ -906,7 +914,7 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  // Must be called continuously to generate smooth sine wave.
+  // Must be called continuously to sweep speaker tone frequency.
   updateSpeakerWaveforms();
 
   if (
