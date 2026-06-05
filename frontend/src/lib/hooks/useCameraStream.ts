@@ -14,6 +14,9 @@ function getApiBases() {
 
 export function useCameraStream() {
   const [streamUrl, setStreamUrl] = useState("");
+  const [cameraSource, setCameraSource] = useState<"esp32" | "laptop" | "unknown">(
+    "unknown",
+  );
 
   useEffect(() => {
     const apiBases = getApiBases();
@@ -21,6 +24,18 @@ export function useCameraStream() {
     const fetchStreamUrl = async () => {
       for (const apiBase of apiBases) {
         try {
+          const statusRes = await fetch(`${apiBase}/api/camera/recognition-status`);
+          if (statusRes.ok) {
+            const status = await statusRes.json();
+            const source = status.camera_source ?? "unknown";
+            setCameraSource(source);
+
+            if (source === "laptop") {
+              setStreamUrl(`${apiBase}/api/esp32/stream`);
+              return;
+            }
+          }
+
           const res = await fetch(`${apiBase}/api/arduino/status`);
           if (!res.ok) continue;
 
@@ -29,6 +44,7 @@ export function useCameraStream() {
             data.camera_node?.stream_url || data.camera_node?.device?.stream_url;
 
           if (data.camera_node?.connected && directStreamUrl) {
+            setCameraSource("esp32");
             setStreamUrl(directStreamUrl);
             return;
           }
@@ -37,6 +53,7 @@ export function useCameraStream() {
         }
       }
 
+      setCameraSource("unknown");
       setStreamUrl("");
     };
 
@@ -45,5 +62,5 @@ export function useCameraStream() {
     return () => window.clearInterval(interval);
   }, []);
 
-  return streamUrl;
+  return { streamUrl, cameraSource };
 }

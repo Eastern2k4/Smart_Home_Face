@@ -72,7 +72,7 @@ export const useStore = create<Store>((set, get) => ({
   leds: { wc: false, kitchen: false, bedroom: false },
   autoLed: { wc: false, kitchen: false, bedroom: false },
   ledThresholds: { wc: 30, kitchen: 50, bedroom: 30 },
-  gasThreshold: 500,
+  gasThreshold: 3000,
   gasAlertActive: false,
   buzzerMuteTime: 0,
   pollingInterval: 2.5,

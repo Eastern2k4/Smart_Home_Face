@@ -7,6 +7,8 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 class CameraClient:
+    source = "esp32"
+
     def __init__(self, base_url=None, registry=None):
         self._base_url = base_url
         self._registry = registry

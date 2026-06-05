@@ -20,6 +20,7 @@ export interface VerificationResult {
 
 export interface RecognitionStatus {
   running: boolean;
+  camera_source: "esp32" | "laptop" | "unknown";
   door_allowed: boolean;
   classification: "idle" | "host" | "stranger" | "no_face" | "spoof" | "error";
   identity: string | null;
@@ -152,6 +153,22 @@ export const faceApi = {
     }
     const blob = await res.blob();
     return new File([blob], "esp32-capture.jpg", { type: "image/jpeg" });
+  },
+
+  async fetchCameraSnapshot(): Promise<File> {
+    const res = await fetch(`${getApiBase()}/api/esp32/snapshot`);
+    if (!res.ok) {
+      let errorText = res.statusText;
+      try {
+        const data = await res.json();
+        errorText = data.error || data.message || errorText;
+      } catch {
+        errorText = await res.text();
+      }
+      throw new Error(`Failed to fetch camera snapshot: ${errorText}`);
+    }
+    const blob = await res.blob();
+    return new File([blob], "camera-source-capture.jpg", { type: "image/jpeg" });
   },
 
   async deleteFace(name: string): Promise<{ success: boolean }> {

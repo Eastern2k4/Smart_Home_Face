@@ -4,10 +4,19 @@ import { Camera, DoorClosed, DoorOpen, Video } from "lucide-react";
 export function DoorCameraCard({
   doorOpen,
   streamUrl,
+  cameraSource = "unknown",
 }: {
   doorOpen: boolean;
   streamUrl: string;
+  cameraSource?: "esp32" | "laptop" | "unknown";
 }) {
+  const sourceLabel =
+    cameraSource === "laptop"
+      ? "Laptop camera"
+      : cameraSource === "esp32"
+        ? "ESP32-CAM"
+        : "Camera";
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border p-6">
@@ -17,9 +26,11 @@ export function DoorCameraCard({
           </div>
           <div>
             <h3 className="text-2xl font-semibold text-foreground">
-              ESP32-CAM - Cửa ra vào
+              {sourceLabel} - Cửa ra vào
             </h3>
-            <p className="text-success">Trực tuyến</p>
+            <p className={streamUrl ? "text-success" : "text-muted-foreground"}>
+              {streamUrl ? "Trực tuyến" : "Đang chờ camera"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4 text-muted-foreground">
@@ -36,7 +47,7 @@ export function DoorCameraCard({
           <div className="flex justify-center bg-black py-6">
             <img
               src={streamUrl}
-              alt="ESP32 Stream"
+              alt={`${sourceLabel} stream`}
               className="aspect-square w-[420px] object-contain rounded-xl bg-black"
             />
           </div>
@@ -48,7 +59,14 @@ export function DoorCameraCard({
       </div>
       <div className="flex items-center gap-3 border-t border-border px-6 py-4">
         <span className="rounded bg-background px-3 py-1 text-xs font-bold">
-          LIVE
+          {streamUrl ? "LIVE" : "OFFLINE"}
+        </span>
+        <span className="rounded bg-background px-3 py-1 text-xs font-bold">
+          {cameraSource === "laptop"
+            ? "LAPTOP"
+            : cameraSource === "esp32"
+              ? "ESP32"
+              : "UNKNOWN"}
         </span>
         <span className="rounded bg-background px-3 py-1 text-xs font-bold">
           {doorOpen ? "DOOR OPEN" : "DOOR CLOSED"}

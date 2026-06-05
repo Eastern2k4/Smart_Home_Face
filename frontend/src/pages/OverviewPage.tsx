@@ -10,7 +10,7 @@ import { Droplets, Flame, Thermometer } from "lucide-react";
 export function OverviewPage() {
   useSensorPolling();
   useAutoLED();
-  const streamUrl = useCameraStream();
+  const { streamUrl, cameraSource } = useCameraStream();
   const store = useStore();
   const livingRoom = store.sensors.livingRoom;
   const bedroom = store.sensors.bedroom;
@@ -64,7 +64,11 @@ export function OverviewPage() {
           status={gas >= 200 ? (gas >= 300 ? "danger" : "warning") : "normal"}
         />
       </div>
-      <DoorCameraCard doorOpen={store.doorOpen} streamUrl={streamUrl} />
+      <DoorCameraCard
+        doorOpen={store.doorOpen}
+        streamUrl={streamUrl}
+        cameraSource={cameraSource}
+      />
     </div>
   );
 }

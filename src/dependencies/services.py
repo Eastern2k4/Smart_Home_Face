@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from src.camera.laptop_client import LaptopCameraClient
+from src.config import CAMERA_SOURCE, LAPTOP_CAMERA_INDEX
 from src.esp32.camera_client import CameraClient
 from src.esp32.sensor_client import SensorNodeClient
 from src.services.camera_recognition import CameraRecognitionService
@@ -21,7 +23,10 @@ class ServiceContainer:
 def create_service_container() -> ServiceContainer:
     device_registry_service = DeviceRegistryService()
     sensor_client = SensorNodeClient(registry=device_registry_service)
-    camera_client = CameraClient(registry=device_registry_service)
+    if CAMERA_SOURCE == "laptop":
+        camera_client = LaptopCameraClient(camera_index=LAPTOP_CAMERA_INDEX)
+    else:
+        camera_client = CameraClient(registry=device_registry_service)
     face_verification_service = FaceVerificationService()
     device_control_service = DeviceControlService(sensor_client)
     camera_recognition_service = CameraRecognitionService(

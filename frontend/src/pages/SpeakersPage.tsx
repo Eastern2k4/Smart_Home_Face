@@ -48,7 +48,7 @@ export function SpeakersPage() {
   const [frontVolume, setFrontVolume] = useState(80);
   const [houseGasVolume, setHouseGasVolume] = useState(75);
   const [duration, setDuration] = useState(5000);
-  const [gasThreshold, setGasThreshold] = useState(500);
+  const [gasThreshold, setGasThreshold] = useState(3000);
   const [temperatureThreshold, setTemperatureThreshold] = useState(35);
   const [humidityThreshold, setHumidityThreshold] = useState(80);
   const [speakerState, setSpeakerState] = useState<
@@ -71,7 +71,7 @@ export function SpeakersPage() {
         setHouseGasVolume(houseGas?.volume ?? 75);
         setDuration(settings.alertDurationMs ?? 5000);
         const loadedGasThreshold =
-          settings.thresholds?.gas ?? settings.gasThreshold ?? 500;
+          settings.thresholds?.gas ?? settings.gasThreshold ?? 3000;
         setGasThreshold(loadedGasThreshold);
         setStoreGasThreshold(loadedGasThreshold);
         setTemperatureThreshold(settings.thresholds?.temperature ?? 35);
@@ -227,8 +227,8 @@ export function SpeakersPage() {
             <Slider
               className="mt-4"
               min={0}
-              max={2000}
-              step={10}
+              max={4095}
+              step={25}
               value={[gasThreshold]}
               onValueChange={([value]) => setGasThreshold(value)}
             />

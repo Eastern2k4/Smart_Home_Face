@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 
 export function CameraPage() {
   const store = useStore();
-  const streamUrl = useCameraStream();
+  const { streamUrl, cameraSource } = useCameraStream();
   const [recognitionStatus, setRecognitionStatus] =
     useState<RecognitionStatus | null>(null);
   const [recognitionNotice, setRecognitionNotice] = useState<string | null>(null);
@@ -90,7 +90,11 @@ export function CameraPage() {
           {recognitionNotice}
         </div>
       )}
-      <DoorCameraCard doorOpen={store.doorOpen} streamUrl={streamUrl} />
+      <DoorCameraCard
+        doorOpen={store.doorOpen}
+        streamUrl={streamUrl}
+        cameraSource={recognitionStatus?.camera_source ?? cameraSource}
+      />
       <div className="rounded-xl border border-border bg-card p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -99,6 +103,14 @@ export function CameraPage() {
               {recognitionStatus?.running
                 ? "Dang chup anh moi 5 giay va so sanh voi database/Hosts"
                 : "Monitor chua chay"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Nguon camera:{" "}
+              {(recognitionStatus?.camera_source ?? cameraSource) === "laptop"
+                ? "Laptop camera"
+                : (recognitionStatus?.camera_source ?? cameraSource) === "esp32"
+                  ? "ESP32-CAM"
+                  : "Chua xac dinh"}
             </p>
           </div>
           <span

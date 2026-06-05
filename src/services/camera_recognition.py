@@ -68,6 +68,7 @@ class CameraRecognitionService:
         with self._lock:
             return {
                 "running": self._thread is not None and self._thread.is_alive(),
+                "camera_source": getattr(self.camera, "source", "unknown"),
                 "classification": self.current_state.classification,
                 "identity": self.current_state.identity,
                 "confidence": (
@@ -104,11 +105,11 @@ class CameraRecognitionService:
             self._update_state(capture)
 
     def snapshot(self, camera_url: str = "") -> bytes:
-        if camera_url:
-            return self.camera.__class__(base_url=camera_url).snapshot()
-        return self.camera.snapshot()
+        return self.camera.snapshot(camera_url or None)
 
     def stream(self, camera_url: str = ""):
+        if hasattr(self.camera, "stream"):
+            return self.camera.stream()
         stream_url = self.camera.stream_url(camera_url)
         response = requests.get(stream_url, stream=True, timeout=10)
         response.raise_for_status()

@@ -553,7 +553,7 @@ void handleSpeakerSettings() {
   server.send(200, "application/json", json);
 }
 
-// GET /api/speaker/settings/update?enabled=true&gas=500&temperature=35&humidity=80
+// GET /api/speaker/settings/update?enabled=true&gas=3000&temperature=35&humidity=80
 void handleSpeakerSettingsUpdate() {
   sendCORS();
 
@@ -594,7 +594,7 @@ void handleHouseGasSpeakerAlert() {
   server.send(200, "application/json", "{\"success\":true,\"target\":\"house_gas\",\"reason\":\"manual_test\"}");
 }
 
-// GET /api/speaker/audio/update?frontVolume=80&houseGasVolume=75&duration=5000&gas=500&temperature=35&humidity=80
+// GET /api/speaker/audio/update?frontVolume=80&houseGasVolume=75&duration=5000&gas=3000&temperature=35&humidity=80
 void handleSpeakerAudioUpdate() {
   sendCORS();
 

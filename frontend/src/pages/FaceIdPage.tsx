@@ -143,6 +143,36 @@ export function FaceIdPage() {
     }, "image/jpeg", 0.92);
   };
 
+  const captureHostFromBackendCamera = async () => {
+    const name = hostName.trim();
+    if (!name) {
+      setMessage("Nhap ten Host truoc khi chup.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      setMessage("Dang chup anh tu backend camera source...");
+      const file = await faceApi.fetchCameraSnapshot();
+      await faceApi.addHostFace(file, name);
+      store.addEvent({
+        timestamp: new Date().toISOString(),
+        type: "door",
+        value: 1,
+        action: `Captured Host face '${name}' from backend camera source`,
+      });
+      setMessage(`Da chup tu backend camera va luu Host '${name}' vao database/Hosts.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Khong the luu anh Host tu backend camera source.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.8fr]">
       <div className="rounded-xl border border-border bg-card p-8">
@@ -193,6 +223,20 @@ export function FaceIdPage() {
               Chup mat va luu vao Hosts
             </Button>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12"
+            onClick={captureHostFromBackendCamera}
+            disabled={loading || !hostName.trim()}
+          >
+            {loading ? (
+              <Loader className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Camera className="mr-2 h-5 w-5" />
+            )}
+            Chup tu backend camera source
+          </Button>
           <button
             className="rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-10 text-center transition-colors hover:bg-primary/10"
             onClick={() => fileRef.current?.click()}
